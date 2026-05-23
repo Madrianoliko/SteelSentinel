@@ -19,6 +19,108 @@ System łączy:
 
 ---
 
+## Główna funkcjonalność — Ochrona nieba przed dronami
+
+Kluczowym elementem systemu jest **koncepcja aktywnej ochrony przestrzeni powietrznej** nad miastem, oparta na danych i analizie infrastruktury:
+
+### 1. Wyznaczenie najbardziej krytycznych elementów infrastruktury
+Na podstawie **analizy grafu zależności** (teoria grafów, centrality, wąskie gardła) system automatycznie wskazuje, które obiekty infrastruktury krytycznej mają największy wpływ kaskadowy — czyli których zniszczenie uderzy w największą liczbę pozostałych węzłów. To właśnie te obiekty stają się priorytetowymi celami do ochrony.
+
+### 2. Wyznaczenie optymalnych miejsc dla sensorów
+Na podstawie rozmieszczenia kluczowych obiektów, ukształtowania terenu oraz typowych korytarzy przelotów BSP, system wskazuje optymalne lokalizacje dla:
+- **sensorów audio** (wykrywanie dźwięku silników dronów)
+- **sensorów IMINT** (kamery, systemy detekcji obiektów — computer vision / object detection)
+- **radarów małej i średniej odległości** (wykrywanie BSP i amunicji krążącej)
+
+Rozmieszczenie sensorów minimalizuje martwe strefy i maksymalizuje czas ostrzegania.
+
+### 3. Wyznaczenie optymalnych miejsc dla środków przechwytujących
+Na podstawie analizy **potencjalnych kierunków ataku przeciwnika** (analiza geograficzna, osi drogowych i rzecznych, danych OSINT) system proponuje optymalne rozmieszczenie:
+- **dronów C-UAS** (Counter-UAS) do zwalczania wrogich BSP
+- **wyrzutni rakiet krótkiego zasięgu** (SHORAD / VSHORAD)
+- **stref pokrycia** zapewniających ochronę kluczowych obiektów z uwzględnieniem zasięgu i czasu reakcji
+
+System w czasie rzeczywistym dobiera najlepszy dostępny środek przechwytujący dla wykrytego zagrożenia i prezentuje decyzję w formie **Explainable AI** — uzasadniając wybór konkretnymi danymi (zasięg, czas reakcji, prawdopodobieństwo trafienia).
+
+---
+
+## Dodatkowe funkcjonalności
+
+### Mapa infrastruktury krytycznej
+- Widok na poziomie kraju, województwa i miasta (podzielonego na sektory)
+- Różne podkłady mapowe zależnie od przybliżenia (standardowy, satelitarny, taktyczny)
+- **Widok operatorski** — mapa z oznaczonymi obiektami infrastruktury, filtrowanie po kategorii
+- **Widok ekspercki** — mapa z naniesionymi krawędziami grafu zależności między obiektami
+- **Kolorowanie sektorów** — sektor z wykrytym zagrożeniem oznaczony na czerwono, sektory narażone kaskadowo na żółto
+- **Warstwa zagłuszeń GPS** — mapa aktywnych zagłuszeń GPS z podziałem na sektory
+
+### Graf zależności — grafowa baza danych
+Obiekty infrastruktury krytycznej zgodnie z Ustawą o zarządzaniu kryzysowym, z atrybutami:
+- **Zaopatrzenie w energię**: stacje transformatorowe, linie WN
+- **Łączność i sieci teleinformatyczne**: maszty, centra danych, serwerownie
+- **Finanse**: oddziały bankowe, centra rozliczeniowe
+- **Zaopatrzenie w żywność**: magazyny, hurtownie — stan bieżący vs. norma krajowa vs. wymagania wojewody
+- **Zaopatrzenie w wodę**: ujęcia, stacje uzdatniania, przepompownie — stan bieżący, zużycie dobowe, rezerwy
+- **Ochrona zdrowia**: szpitale, WSPR — zasoby logistyczne, zużycie dzienne, trasy zaopatrzenia
+- **Transport**: drogi, mosty, węzły — nośność, stan techniczny
+- **Ratownictwo**: jednostki PSP, pogotowie, zasoby
+- **Administracja**: centra zarządzania kryzysowego, urzędy
+- **Substancje niebezpieczne**: zbiorniki paliw, rurociągi, zakłady chemiczne
+
+### Scenariusze zagrożeń
+- **Tereny zalewowe** — nakładka z obszarami zagrożonymi powodzią (dane IMGW / hydro.imgw.pl)
+- **Wariant I** — dywersja i sabotaż (np. przerwanie wałów → zalanie → kaskada)
+- **Wariant II** — atak powietrzny BSP / amunicja krążąca / rakiety (pełne demo)
+- **Wariant III** — atak lądowy (analiza osi natarcia, blokady, rozmieszczenie)
+- **Atak cybernetyczny** — monitoring sieci teleinformatycznych, SLA pentestów
+
+### Analiza wrażliwości i wąskie gardła
+- Na podstawie stanu zasobów i tempa zużycia — automatyczne wskazanie obiektów wymagających priorytetowego uzupełnienia
+- Analiza grafowa (betweenness centrality) — wyznaczenie wąskich gardeł sieci infrastruktury
+
+### Dostępne technologie ochronne
+- Analiza naturalnych barier (rzeki, tereny zalewowe) — propozycja budowy pasów ochronnych
+- Mapa głębokości wód — możliwe przeszkody wodne
+- Lokalizacja istniejących schronów — propozycja polowych szpitali i punktów medycznych
+- Parkingi podziemne galerii — alternatywne schrony dla ludności
+
+### Ostrzeganie, monitorowanie i naprawy
+- **Sensory z poziomami alarmowania** — progi ostrzegawcze dla kluczowych parametrów infrastruktury
+- **Lista priorytetów napraw** — wyliczana automatycznie na podstawie grafu zależności po zdarzeniu
+- **Zarządzanie ewakuacją** — trasy ewakuacji z zachowaniem drożności dla wojska i służb ratunkowych
+- **Zagłuszanie GPS** — monitoring stref zagłuszania, ostrzeżenia dla operatorów
+- **OSINT** — integracja z otwartymi źródłami danych wywiadowczych
+- **IMINT** — sensory z detekcją obiektów (computer vision) w martwych strefach radarów
+- **SIGINT** — monitoring sygnałów radiowych
+- **HUMINT** — zarządzanie zgłoszeniami od obywateli i służb terenowych
+- **Kamienie milowe** — system śledzenia postępu zagrożenia (np. "Przejęli Przemyśl → szacowany czas dotarcia do Stalowej Woli: 4h")
+- **Czujki** — sieć czujników wczesnego ostrzegania na obrzeżach miasta
+- **Monitoring pentestów** — pilnowanie terminów testów penetracyjnych, rotacji kluczy API, certyfikatów
+
+### Digital Twin
+- Symulacja działania całego systemu infrastruktury w czasie rzeczywistym
+- **"Zasymuluj następne 24h"** — prognoza kaskadowych skutków przy aktualnym stanie zasobów
+- Symulacja scenariuszy przed podjęciem decyzji operacyjnej
+- Analiza: przy dużym wietrze → alert o potencjalnym zagrożeniu bronią chemiczną z zakładów przemysłowych
+
+### Aplikacja mobilna dla mieszkańców
+- Komunikaty alarmowe i ewakuacyjne (push notifications)
+- Zgłoszenia od obywateli — HUMINT z terenu
+- Mapa schronów i punktów ewakuacyjnych
+- Instrukcje postępowania w różnych scenariuszach zagrożeń
+
+### Explainable AI
+- Każda rekomendacja systemu jest uzasadniona konkretnymi danymi
+- Przykład: "Rekomendacja: zestrzel dronem Alfa-3 (zasięg: ✓, czas: 38s, p-stwo: 87%) — alternatywa Beta-1 odrzucona (czas: 90s — za wolno)"
+- Analiza kaskadowa z wyjaśnieniem: "Powódź w sektorze C → zablokowana DK77 → brak dostaw do szpitala → wyczerpanie rezerw za 30h"
+
+### Pamięć instytucjonalna
+- Repozytorium procedur kryzysowych i dokumentów operacyjnych
+- Historia zdarzeń i podjętych decyzji
+- Baza wiedzy dla nowych operatorów
+
+---
+
 ## Architektura systemu
 
 ```
