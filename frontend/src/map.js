@@ -3,13 +3,13 @@
 // ============================================================
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { STALOWA_WOLA_CENTER, CATEGORIES, SENSORS, CUAV_ASSETS } from './data.js'
+import { STALOWA_WOLA_CENTER, CATEGORIES, SENSORS, CUAV_ASSETS, AIR_DEFENSE_SENSORS, AIR_DEFENSE_EFFECTORS } from './data.js'
 import { GPS_JAM_HEXES } from './gpsJamData.js'
 import { showNodeDetail, updateCategoryCount, showCascade } from './ui.js'
 
 let map
 const layerGroups = {}
-const overlayLayers = { sensors: null, gpsJam: null, sectors: null, cuav: null, flood: null }
+const overlayLayers = { sensors: null, gpsJam: null, sectors: null, cuav: null, flood: null, airDefense: null }
 
 // Sector polygon state (for dynamic coloring)
 const sectorPolygons = {}  // label → L.polygon
@@ -272,6 +272,162 @@ export function toggleCuav(visible) {
   })
   g.addTo(map)
   overlayLayers.cuav = g
+}
+
+// ── AIR DEFENSE LAYER ────────────────────────────────────────────────────────
+export function toggleAirDefense(visible) {
+  if (overlayLayers.airDefense) { map.removeLayer(overlayLayers.airDefense); overlayLayers.airDefense = null }
+  if (!visible) return
+
+  const g = L.layerGroup()
+
+  // ─ Sensor coverage & markers ─
+  const SENSOR_CFG = {
+    radar:  { color: '#4fc3f7', label: 'Radar dozorowania',   pulse: true  },
+    audio:  { color: '#ce93d8', label: 'Sensor audio',        pulse: false },
+    imint:  { color: '#fff176', label: 'Kamera EO/IR',        pulse: false },
+    rf:     { color: '#80cbc4', label: 'Detektor RF',         pulse: false },
+  }
+
+  AIR_DEFENSE_SENSORS.forEach(s => {
+    const cfg = SENSOR_CFG[s.type]
+
+    // Coverage circle
+    L.circle([s.lat, s.lng], {
+      radius: s.radius,
+      color: cfg.color,
+      fillColor: cfg.color,
+      fillOpacity: s.type === 'radar' ? 0.04 : 0.08,
+      weight: 1,
+      dashArray: s.type === 'radar' ? null : '5 4',
+    }).addTo(g)
+
+    // Directional FOV arc for IMINT cameras
+    if (s.fov && s.fov < 360 && s.bearing !== undefined) {
+      const arc = _buildArc(s.lat, s.lng, s.radius, s.bearing - s.fov / 2, s.bearing + s.fov / 2)
+      L.polygon(arc, {
+        color: cfg.color, fillColor: cfg.color,
+        fillOpacity: 0.18, weight: 1,
+      }).addTo(g)
+    }
+
+    // Sensor icon marker
+    const pulseHtml = cfg.pulse
+      ? `animation:pulse-sensor 2s infinite;box-shadow:0 0 0 0 ${cfg.color}88;`
+      : ''
+    L.marker([s.lat, s.lng], {
+      icon: L.divIcon({
+        html: `<div style="
+          width:28px;height:28px;border-radius:50%;
+          background:rgba(13,21,38,0.85);
+          border:2px solid ${cfg.color};
+          display:flex;align-items:center;justify-content:center;
+          font-size:13px;${pulseHtml}
+        ">${s.icon}</div>`,
+        className: '', iconSize: [28, 28], iconAnchor: [14, 14],
+      }),
+      zIndexOffset: 500,
+    }).bindTooltip(`<b>${s.label}</b><br><span style="color:#8aa0be;font-size:11px">${s.desc}</span>`, {
+      maxWidth: 240,
+    }).addTo(g)
+  })
+
+  // ─ Effector coverage & markers ─
+  const EFFECTOR_CFG = {
+    vshorad:       { color: '#ef5350', dash: null,    label: 'VSHORAD' },
+    shorad:        { color: '#ff7043', dash: null,    label: 'SHORAD'  },
+    cuas_operator: { color: '#00e676', dash: '6 3',   label: 'C-UAS'   },
+  }
+
+  AIR_DEFENSE_EFFECTORS.forEach(e => {
+    const cfg = EFFECTOR_CFG[e.type]
+    const activeColor = e.available ? cfg.color : '#546e7a'
+    const activeFill  = e.available ? 0.07 : 0.03
+
+    // Kill-zone circle
+    L.circle([e.lat, e.lng], {
+      radius: e.range,
+      color: activeColor,
+      fillColor: activeColor,
+      fillOpacity: activeFill,
+      weight: e.available ? 1.5 : 1,
+      dashArray: cfg.dash,
+    }).addTo(g)
+
+    // Status badge
+    const statusColor = e.available ? '#00e676' : '#ef5350'
+    const statusLabel = e.available ? 'AKTYWNY' : 'NIEDOSTĘPNY'
+    const glow = e.available ? `filter:drop-shadow(0 0 6px ${activeColor});` : ''
+
+    L.marker([e.lat, e.lng], {
+      icon: L.divIcon({
+        html: `<div style="position:relative;${glow}">
+          <div style="
+            width:34px;height:34px;border-radius:4px;
+            background:rgba(13,21,38,0.9);
+            border:2px solid ${activeColor};
+            display:flex;align-items:center;justify-content:center;
+            font-size:18px;
+          ">${e.icon}</div>
+          <div style="
+            position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);
+            background:${statusColor};color:#000;
+            font-size:8px;font-weight:800;padding:1px 4px;border-radius:2px;
+            white-space:nowrap;letter-spacing:0.5px;
+          ">${statusLabel}</div>
+        </div>`,
+        className: '', iconSize: [34, 48], iconAnchor: [17, 17],
+      }),
+      zIndexOffset: 1000,
+    }).bindTooltip(`
+      <b>${e.label}</b><br>
+      <span style="color:${statusColor};font-weight:700">${statusLabel}</span><br>
+      <span style="color:#8aa0be;font-size:11px">${e.desc}</span><br>
+      <span style="color:#5a7499;font-size:10px">Zasięg: ${(e.range/1000).toFixed(1)} km</span>
+    `, { maxWidth: 260 }).addTo(g)
+  })
+
+  // ─ Legend ─
+  const legend = L.control({ position: 'bottomright' })
+  legend.onAdd = () => {
+    const div = L.DomUtil.create('div')
+    div.style.cssText = `
+      background:rgba(13,21,38,0.92);border:1px solid #1e3a5f;border-radius:6px;
+      padding:10px 14px;color:#e8edf5;font-size:11px;line-height:1.9;pointer-events:none;margin-bottom:8px;
+    `
+    div.innerHTML = `
+      <b style="color:#90caf9;font-size:12px">⚔️ Ochrona powietrzna</b><br>
+      <span style="color:#4fc3f7">📡</span> Radar dozorowania<br>
+      <span style="color:#ce93d8">🎙️</span> Sensor audio (matryca)<br>
+      <span style="color:#fff176">📷</span> Kamera EO/IR (AI)<br>
+      <span style="color:#80cbc4">📻</span> Detektor RF<br>
+      <span style="color:#ef5350">🚀</span> VSHORAD / SHORAD<br>
+      <span style="color:#00e676">🚁</span> Operator C-UAS<br>
+    `
+    return div
+  }
+  legend.addTo(map)
+
+  g._legend = legend
+  const origRemove = g.remove.bind(g)
+  g.remove = () => { try { legend.remove() } catch {} origRemove() }
+
+  g.addTo(map)
+  overlayLayers.airDefense = g
+}
+
+// Helper: build FOV arc polygon [lat, lng]
+function _buildArc(lat, lng, radius, startDeg, endDeg) {
+  const R = 6371000
+  const pts = [[lat, lng]]
+  const steps = 24
+  for (let i = 0; i <= steps; i++) {
+    const angle = ((startDeg + (endDeg - startDeg) * i / steps) * Math.PI) / 180
+    const dLat = (radius * Math.cos(angle)) / R
+    const dLng = (radius * Math.sin(angle)) / (R * Math.cos((lat * Math.PI) / 180))
+    pts.push([lat + (dLat * 180) / Math.PI, lng + (dLng * 180) / Math.PI])
+  }
+  return pts
 }
 
 // ── FLOOD ZONES ─────────────────────────────────────────────────────────────

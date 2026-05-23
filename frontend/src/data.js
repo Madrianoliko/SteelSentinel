@@ -765,3 +765,119 @@ export const CUAV_ASSETS = [
   { id: 2, lat: 50.5720, lng: 22.0350, label: 'C-UAS Beta-1',  range: 2500, available: false },
   { id: 3, lat: 50.5950, lng: 22.0600, label: 'C-UAS Gamma-2', range: 2000, available: false },
 ]
+
+// ── OCHRONA POWIETRZNA — sensory i efektory ─────────────────────────────────
+export const AIR_DEFENSE_SENSORS = [
+  {
+    id: 'radar-sw1',
+    lat: 50.5848, lng: 22.0522,
+    type: 'radar',
+    label: 'Radar dozorowania SW-1',
+    desc: 'Radar małej i średniej odległości. Pokrycie 360°, dystans 25 km. Centrum dowodzenia CZK.',
+    radius: 25000,
+    icon: '📡',
+  },
+  {
+    id: 'audio-east',
+    lat: 50.5800, lng: 22.1400,
+    type: 'audio',
+    label: 'Sensor audio — kierunek wschód',
+    desc: 'Matryca mikrofonów kierunkowych. Detekcja silników dronów z odl. do 2 km. Pokrywa korytarz wschodni.',
+    radius: 2000,
+    bearing: 270,   // kierunek nasłuchu — zachód (skąd leci dron 1)
+    icon: '🎙️',
+  },
+  {
+    id: 'imint-east',
+    lat: 50.5790, lng: 22.1050,
+    type: 'imint',
+    label: 'Kamera EO/IR — korytarz wschodni',
+    desc: 'Kamera elektrooptyczna + termowizyjna. Detekcja i śledzenie obiektów. Zasięg identyfikacji: 1,5 km.',
+    radius: 1500,
+    bearing: 90,    // patrzy na wschód
+    fov: 60,        // pole widzenia w stopniach
+    icon: '📷',
+  },
+  {
+    id: 'audio-north',
+    lat: 50.6050, lng: 22.0650,
+    type: 'audio',
+    label: 'Sensor audio — kierunek północny',
+    desc: 'Matryca mikrofonów. Pokrywa korytarz północny (trasa drona Shahed od Nisko).',
+    radius: 2200,
+    bearing: 180,
+    icon: '🎙️',
+  },
+  {
+    id: 'imint-hsw',
+    lat: 50.5820, lng: 22.0490,
+    type: 'imint',
+    label: 'Kamera EO/IR — ochrona HSW',
+    desc: 'Kamera zamontowana na maszcie HSW. 360°, AI object detection. Priorytet: ochrona zakładu.',
+    radius: 1200,
+    fov: 360,
+    icon: '📷',
+  },
+  {
+    id: 'rf-detector',
+    lat: 50.5750, lng: 22.0700,
+    type: 'rf',
+    label: 'Detektor RF — pasmo 2.4/5.8 GHz',
+    desc: 'Detekcja emisji radiowych dronów FPV i komercyjnych. Lokalizacja nadajnika metodą TDOA.',
+    radius: 3500,
+    icon: '📻',
+  },
+]
+
+export const AIR_DEFENSE_EFFECTORS = [
+  {
+    id: 'cuav-alfa3',
+    lat: 50.5831, lng: 22.0510,
+    type: 'cuas_operator',
+    label: 'C-UAS Alfa-3 — operator',
+    desc: 'Stanowisko operatora drona przechwytującego. Stan: DOSTĘPNY. Czas reakcji: ~30s.',
+    range: 3000,
+    available: true,
+    icon: '🚁',
+  },
+  {
+    id: 'vshorad-east',
+    lat: 50.5785, lng: 22.1080,   // NA TRASIE DRONA 1
+    type: 'vshorad',
+    label: 'Stanowisko VSHORAD Piorun-1',
+    desc: 'Przenośny zestaw rakietowy VSHORAD "Piorun". Zasięg: 6,5 km, pułap: 4 km. Umieszczony na osi korytarza wschodniego — na trasie drona #1.',
+    range: 6500,
+    available: true,
+    icon: '🚀',
+  },
+  {
+    id: 'cuas-gamma2',
+    lat: 50.5955, lng: 22.0610,
+    type: 'cuas_operator',
+    label: 'C-UAS Gamma-2 — operator',
+    desc: 'Stanowisko operatora C-UAS. Pokrycie: sektor północny. Stan: SERWIS.',
+    range: 2500,
+    available: false,
+    icon: '🚁',
+  },
+  {
+    id: 'cuas-beta1',
+    lat: 50.5715, lng: 22.0345,
+    type: 'cuas_operator',
+    label: 'C-UAS Beta-1 — operator',
+    desc: 'Stanowisko operatora drona przechwytującego. Pokrycie: sektor zachodni/HSW. Stan: PRZEŁADOWANIE.',
+    range: 2500,
+    available: false,
+    icon: '🚁',
+  },
+  {
+    id: 'shorad-hsw',
+    lat: 50.5728, lng: 22.0435,
+    type: 'shorad',
+    label: 'Stanowisko SHORAD — ochrona HSW',
+    desc: 'Zestaw przeciwlotniczy krótkiego zasięgu. Ochrona obiektu HSW S.A. Zasięg: 8 km.',
+    range: 8000,
+    available: true,
+    icon: '🛡️',
+  },
+]
