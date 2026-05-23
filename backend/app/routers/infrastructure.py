@@ -2,10 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
-from app.models.infrastructure import InfrastructureNode, InfrastructureCategory, RiskLevel
-from pydantic import BaseModel
+from app.models.infrastructure import InfrastructureNode
 
 router = APIRouter()
+
+
+class NodeResponse:
+    pass
+
+
+from pydantic import BaseModel
 
 
 class NodeResponse(BaseModel):
@@ -14,12 +20,12 @@ class NodeResponse(BaseModel):
     category: str
     lat: float
     lng: float
-    risk_level: str
+    risk: str
     is_active: bool
     resources: dict
-    hours_until_critical: Optional[float]
-    description: Optional[str]
-    sector: Optional[str]
+    hours_until_critical: Optional[float] = None
+    description: Optional[str] = None
+    sector: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -28,7 +34,7 @@ class NodeResponse(BaseModel):
 @router.get("/", response_model=List[NodeResponse])
 def get_all_nodes(
     category: Optional[str] = None,
-    risk_level: Optional[str] = None,
+    risk: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Pobierz wszystkie węzły infrastruktury krytycznej."""
@@ -36,8 +42,8 @@ def get_all_nodes(
 
     if category:
         query = query.filter(InfrastructureNode.category == category)
-    if risk_level:
-        query = query.filter(InfrastructureNode.risk_level == risk_level)
+    if risk:
+        query = query.filter(InfrastructureNode.risk == risk)
 
     return query.all()
 
@@ -57,13 +63,38 @@ def get_cascade_impact(node_id: int, db: Session = Depends(get_db)):
     Oblicz kaskadowy wpływ zniszczenia danego węzła.
     Zwraca listę obiektów dotkniętych zniszczeniem wraz z czasem do skutku.
     """
-    # TODO: implementacja BFS/DFS po grafie zależności
-    # Na razie zwracamy mock
-    return {
-        "node_id": node_id,
-        "cascade": [
-            {"node_id": 2, "name": "Szpital Powiatowy", "hours_to_impact": 4.0, "reason": "Brak zasilania"},
-            {"node_id": 5, "name": "Przepompownia wody", "hours_to_impact": 2.0, "reason": "Brak zasilania"},
-            {"node_id": 8, "name": "Centrum zarządzania kryzysowego", "hours_to_impact": 1.0, "reason": "Brak łączności"},
-        ]
-    }
+    from app.models.graph import InfrastructureEdge
+
+    # BFS po grafie zależności
+    visited = set()
+    queue = [node_id]
+    cascade = []
+
+    while queue:
+        current = queue.pop(0)
+        if current in visited:
+            continue
+        visited.add(current)
+
+        edges = db.query(InfrastructureEdge).filter(
+            InfrastructureEdge.source_id == current
+        ).all()
+
+        for edge in edges:
+            if edge.target_id not in visited:
+                target = db.query(InfrastructureNode).filter(
+                    InfrastructureNode.id == edge.target_id
+                ).first()
+                if target:
+                    cascade.append({
+                        "node_id": target.id,
+                        "name": target.name,
+                        "category": target.category,
+                        "hours_to_impact": edge.hours_to_impact,
+                        "reason": edge.description or edge.dependency_type,
+                        "risk": target.risk,
+                    })
+                queue.append(edge.target_id)
+
+    cascade.sort(key=lambda x: (x["hours_to_impact"] or 0))
+    return {"node_id": node_id, "cascade": cascade}

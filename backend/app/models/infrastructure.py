@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float, Enum, JSON, Boolean
+from sqlalchemy import Column, Integer, String, Float, Boolean, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from app.database import Base
 import enum
 
@@ -11,7 +12,7 @@ class InfrastructureCategory(str, enum.Enum):
     HEALTH = "health"                  # Ochrona zdrowia
     ADMINISTRATION = "administration"  # Administracja publiczna
     INDUSTRIAL = "industrial"          # Przemysłowa / obronna
-    CHEMICAL = "chemical"              # Chemiczna / paliwowa
+    CHEMICAL = "chemical"             # Chemiczna / paliwowa
     FOOD = "food"                      # Zaopatrzenie w żywność
     RESCUE = "rescue"                  # Ratownicza
 
@@ -28,19 +29,18 @@ class InfrastructureNode(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    category = Column(Enum(InfrastructureCategory), nullable=False)
-    lat = Column(Float, nullable=False)        # Szerokość geograficzna
-    lng = Column(Float, nullable=False)        # Długość geograficzna
-    risk_level = Column(Enum(RiskLevel), default=RiskLevel.MEDIUM)
+    category = Column(String, nullable=False, index=True)
+    lat = Column(Float, nullable=False)
+    lng = Column(Float, nullable=False)
+    risk = Column(String, nullable=False, default="medium")   # low/medium/high/critical
+    sector = Column(String, nullable=True)                    # A/B/C/D
     is_active = Column(Boolean, default=True)
 
-    # Zasoby i stan
-    resources = Column(JSON, default={})       # {"capacity": 100, "current": 85, "unit": "%"}
-    consumption_per_day = Column(Float, nullable=True)
-    hours_until_critical = Column(Float, nullable=True)  # Wyliczane dynamicznie
-
-    # Metadane
-    description = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
     address = Column(String, nullable=True)
-    sector = Column(String, nullable=True)     # np. "A", "B", "C" — sektory miasta
-    metadata = Column(JSON, default={})
+
+    resources = Column(JSONB, default={})
+    hours_until_critical = Column(Float, nullable=True)
+
+    # extra_data zamiast metadata (metadata jest zarezerwowane przez SQLAlchemy)
+    extra_data = Column(JSONB, default={})
