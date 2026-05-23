@@ -3,7 +3,7 @@
 // ============================================================
 import './style.css'
 import { fetchInfrastructure } from './api.js'
-import { initMap, toggleCategory, toggleSensors, toggleGpsJam, toggleSectors, toggleCuav } from './map.js'
+import { initMap, toggleCategory, toggleSensors, toggleGpsJam, toggleSectors, toggleCuav, toggleFlood } from './map.js'
 import { initGraph, renderBottlenecks } from './graph.js'
 import { runDemoStep } from './demo.js'
 import { initThreatsView } from './threats.js'
@@ -30,6 +30,7 @@ async function main() {
   document.getElementById('toggle-gps-jam').addEventListener('change', e => toggleGpsJam(e.target.checked))
   document.getElementById('toggle-sectors').addEventListener('change', e => toggleSectors(e.target.checked))
   document.getElementById('toggle-cuav').addEventListener('change', e => toggleCuav(e.target.checked))
+  document.getElementById('toggle-flood').addEventListener('change', e => toggleFlood(e.target.checked))
 
   // Demo panel
   initDemoPanel(runDemoStep)

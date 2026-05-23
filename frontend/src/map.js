@@ -4,11 +4,15 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { STALOWA_WOLA_CENTER, CATEGORIES, SENSORS, CUAV_ASSETS } from './data.js'
+import { GPS_JAM_HEXES } from './gpsJamData.js'
 import { showNodeDetail, updateCategoryCount, showCascade } from './ui.js'
 
 let map
 const layerGroups = {}
-const overlayLayers = { sensors: null, gpsJam: null, sectors: null, cuav: null }
+const overlayLayers = { sensors: null, gpsJam: null, sectors: null, cuav: null, flood: null }
+
+// Sector polygon state (for dynamic coloring)
+const sectorPolygons = {}  // label → L.polygon
 
 // Śledź markery i polylines do resetu
 const nodeMarkers = {}      // nodeId → marker
@@ -115,32 +119,138 @@ export function toggleSensors(visible) {
 export function toggleGpsJam(visible) {
   if (overlayLayers.gpsJam) { map.removeLayer(overlayLayers.gpsJam); overlayLayers.gpsJam = null }
   if (!visible) return
+
   const g = L.layerGroup()
-  L.circle([50.5700, 22.0450], {
-    radius: 2000, color: '#ff9800', fillColor: '#ff9800',
-    fillOpacity: 0.08, weight: 1, dashArray: '4 4',
-  }).bindTooltip('⚡ Strefa zagłuszania GPS').addTo(g)
+
+  const COLORS = {
+    high:   { stroke: '#ef5350', fill: '#ef5350', opacity: 0.55, fillOpacity: 0.35 },
+    medium: { stroke: '#ff9800', fill: '#ff9800', opacity: 0.45, fillOpacity: 0.22 },
+    low:    { stroke: '#ffeb3b', fill: '#ffeb3b', opacity: 0.30, fillOpacity: 0.10 },
+  }
+
+  const LABELS = { high: '🔴 Wysokie', medium: '🟡 Średnie', low: '🟢 Niskie' }
+
+  GPS_JAM_HEXES.forEach(hex => {
+    const c = COLORS[hex.l]
+    if (!c) return
+    const pct = Math.round(hex.r * 100)
+    L.polygon(hex.c, {
+      color:       c.stroke,
+      fillColor:   c.fill,
+      weight:      0.5,
+      opacity:     c.opacity,
+      fillOpacity: c.fillOpacity,
+    }).bindTooltip(
+      `🛰️ Zakłócenia GPS: <b>${LABELS[hex.l]}</b> (${pct}%)<br>` +
+      `<small>Zakłócone: ${hex.b} / ${hex.t} samolotów · gpsjam.org</small>`,
+      { sticky: true }
+    ).addTo(g)
+  })
+
+  // Legend control
+  const legend = L.control({ position: 'topright' })
+  legend.onAdd = () => {
+    const div = L.DomUtil.create('div')
+    div.style.cssText = `
+      background:rgba(13,21,38,0.92);border:1px solid #1e3a5f;border-radius:6px;
+      padding:10px 14px;color:#e8edf5;font-size:11px;line-height:2;pointer-events:none;
+    `
+    div.innerHTML = `
+      <b style="color:#ff9800;font-size:12px">🛰️ Zagłuszanie GPS</b><br>
+      <span style="display:inline-block;width:10px;height:10px;background:#ef5350;border-radius:2px;margin-right:6px;opacity:0.9"></span>Wysokie (&gt;10%)<br>
+      <span style="display:inline-block;width:10px;height:10px;background:#ff9800;border-radius:2px;margin-right:6px;opacity:0.9"></span>Średnie (2–10%)<br>
+      <span style="display:inline-block;width:10px;height:10px;background:#ffeb3b;border-radius:2px;margin-right:6px;opacity:0.9"></span>Niskie (&lt;2%)<br>
+      <span style="color:var(--text-muted);font-size:10px">Źródło: gpsjam.org · adsbexchange.com</span>
+    `
+    return div
+  }
+  legend.addTo(map)
+  g._legend = legend
+
   g.addTo(map)
   overlayLayers.gpsJam = g
+
+  // Cleanup legend on layer remove
+  const origRemove = g.remove.bind(g)
+  g.remove = () => { try { legend.remove() } catch {} origRemove() }
 }
 
+// ── SECTOR POLYGONS ──────────────────────────────────────────────────────────
+// Stalowa Wola podzielona na 4 sektory operacyjne
+const SECTOR_DEFS = [
+  {
+    label: 'A', color: '#90caf9',
+    coords: [[50.570, 22.030], [50.585, 22.030], [50.585, 22.050], [50.570, 22.050]],
+    center: [50.577, 22.040],
+  },
+  {
+    label: 'B', color: '#90caf9',
+    coords: [[50.570, 22.050], [50.595, 22.050], [50.595, 22.065], [50.570, 22.065]],
+    center: [50.582, 22.057],
+  },
+  {
+    label: 'C', color: '#90caf9',
+    coords: [[50.595, 22.050], [50.615, 22.050], [50.615, 22.075], [50.595, 22.075]],
+    center: [50.605, 22.062],
+  },
+  {
+    label: 'D', color: '#90caf9',
+    coords: [[50.555, 22.035], [50.570, 22.035], [50.570, 22.070], [50.555, 22.070]],
+    center: [50.562, 22.052],
+  },
+]
+
 export function toggleSectors(visible) {
+  // Remove old layers but keep polygon references
   if (overlayLayers.sectors) { map.removeLayer(overlayLayers.sectors); overlayLayers.sectors = null }
+  Object.values(sectorPolygons).forEach(p => { try { map.removeLayer(p) } catch {} })
+  Object.keys(sectorPolygons).forEach(k => delete sectorPolygons[k])
   if (!visible) return
+
   const g = L.layerGroup()
-  const sectors = [
-    { label: 'A', lat: 50.575, lng: 22.040 },
-    { label: 'B', lat: 50.585, lng: 22.052 },
-    { label: 'C', lat: 50.593, lng: 22.063 },
-    { label: 'D', lat: 50.564, lng: 22.050 },
-  ]
-  sectors.forEach(s => {
-    L.marker([s.lat, s.lng], {
-      icon: L.divIcon({ html: `<div class="sector-label">${s.label}</div>`, className: '', iconSize: [60, 60] })
+
+  SECTOR_DEFS.forEach(s => {
+    const poly = L.polygon(s.coords, {
+      color: s.color, fillColor: s.color,
+      fillOpacity: 0.06, weight: 1.5, dashArray: '6 3',
+    }).bindTooltip(`Sektor ${s.label}`, { permanent: false })
+    poly.addTo(g)
+    sectorPolygons[s.label] = poly
+
+    L.marker(s.center, {
+      icon: L.divIcon({
+        html: `<div class="sector-label">${s.label}</div>`,
+        className: '', iconSize: [60, 60],
+      })
     }).addTo(g)
   })
+
   g.addTo(map)
   overlayLayers.sectors = g
+}
+
+// Call from demo.js to highlight a sector
+export function colorSector(label, status) {
+  // status: 'threat' | 'cascade' | 'clear'
+  const poly = sectorPolygons[label]
+  if (!poly) return
+  const cfg = {
+    threat:  { color: '#ef5350', fillColor: '#ef5350', fillOpacity: 0.22, weight: 2.5 },
+    cascade: { color: '#ff9800', fillColor: '#ff9800', fillOpacity: 0.14, weight: 1.5 },
+    clear:   { color: '#90caf9', fillColor: '#90caf9', fillOpacity: 0.06, weight: 1.5 },
+  }
+  const c = cfg[status] ?? cfg.clear
+  poly.setStyle(c)
+  if (status === 'threat') {
+    poly.bindTooltip(`🔴 Sektor ${label} — ZAGROŻENIE`, { permanent: true, className: 'sector-threat-tooltip' })
+    poly.openTooltip()
+  } else if (status === 'cascade') {
+    poly.bindTooltip(`🟡 Sektor ${label} — narażony kaskadowo`, { permanent: true, className: 'sector-cascade-tooltip' })
+    poly.openTooltip()
+  } else {
+    poly.unbindTooltip()
+    poly.bindTooltip(`Sektor ${label}`)
+  }
 }
 
 export function toggleCuav(visible) {
@@ -162,6 +272,116 @@ export function toggleCuav(visible) {
   })
   g.addTo(map)
   overlayLayers.cuav = g
+}
+
+// ── FLOOD ZONES ─────────────────────────────────────────────────────────────
+// Tereny zalewowe rzeki San — Stalowa Wola i okolice
+// Źródło: IMGW ISOK, plany zarządzania ryzykiem powodziowym RZGW Rzeszów
+// Q10 = 10-letni, Q100 = 100-letni, Q500 = 500-letni okres powtarzalności
+const FLOOD_ZONES = {
+  q500: {
+    label: 'Zagrożenie powodziowe Q500 (raz na 500 lat)',
+    color: '#4fc3f7',
+    fillOpacity: 0.18,
+    polygons: [
+      // San — odcinek koło Stalowej Woli, szeroka dolina zalewowa
+      [[50.620, 22.000], [50.615, 22.010], [50.600, 22.010], [50.585, 22.020],
+       [50.570, 22.018], [50.558, 22.025], [50.550, 22.030], [50.548, 22.045],
+       [50.552, 22.055], [50.560, 22.060], [50.568, 22.055], [50.575, 22.045],
+       [50.580, 22.035], [50.590, 22.028], [50.600, 22.025], [50.610, 22.012],
+       [50.618, 22.005]],
+      // Dolina Sanu — Nisko/Pysznica
+      [[50.530, 22.030], [50.535, 22.038], [50.542, 22.040], [50.548, 22.035],
+       [50.545, 22.025], [50.538, 22.022], [50.532, 22.025]],
+    ],
+  },
+  q100: {
+    label: 'Zagrożenie powodziowe Q100 (raz na 100 lat)',
+    color: '#2196f3',
+    fillOpacity: 0.22,
+    polygons: [
+      // Węższy pas — Q100 bliżej koryta Sanu
+      [[50.610, 22.008], [50.600, 22.012], [50.590, 22.015], [50.580, 22.022],
+       [50.572, 22.020], [50.562, 22.028], [50.558, 22.038], [50.562, 22.050],
+       [50.568, 22.048], [50.574, 22.038], [50.582, 22.028], [50.592, 22.020],
+       [50.602, 22.018], [50.610, 22.012]],
+      // Tereny zalewowe przy ujściu Sanu — Sandomierz kierunek
+      [[50.540, 22.028], [50.545, 22.035], [50.548, 22.032], [50.544, 22.024]],
+    ],
+  },
+  q10: {
+    label: 'Zagrożenie powodziowe Q10 (raz na 10 lat)',
+    color: '#1565c0',
+    fillOpacity: 0.30,
+    polygons: [
+      // Bezpośrednie koryto Sanu z wąskim pasem zalewowym
+      [[50.605, 22.010], [50.598, 22.014], [50.590, 22.017], [50.582, 22.024],
+       [50.575, 22.023], [50.566, 22.030], [50.562, 22.040], [50.565, 22.047],
+       [50.570, 22.043], [50.575, 22.032], [50.584, 22.026], [50.592, 22.022],
+       [50.600, 22.018], [50.606, 22.014]],
+    ],
+  },
+  river: {
+    label: 'Rzeka San — koryto główne',
+    color: '#29b6f6',
+    fillOpacity: 0.55,
+    polygons: [
+      // Koryto Sanu ~200-300m szerokości
+      [[50.612, 22.008], [50.604, 22.012], [50.596, 22.016], [50.588, 22.022],
+       [50.578, 22.023], [50.568, 22.028], [50.563, 22.037], [50.565, 22.044],
+       [50.567, 22.042], [50.565, 22.035], [50.570, 22.027], [50.579, 22.022],
+       [50.589, 22.020], [50.597, 22.015], [50.605, 22.011], [50.612, 22.009]],
+    ],
+  },
+}
+
+export function toggleFlood(visible) {
+  if (overlayLayers.flood) { map.removeLayer(overlayLayers.flood); overlayLayers.flood = null }
+  if (!visible) return
+
+  const g = L.layerGroup()
+
+  // Draw Q500 → Q100 → Q10 → river (outermost to innermost)
+  ;['q500', 'q100', 'q10', 'river'].forEach(key => {
+    const zone = FLOOD_ZONES[key]
+    zone.polygons.forEach(coords => {
+      L.polygon(coords, {
+        color: zone.color,
+        fillColor: zone.color,
+        fillOpacity: zone.fillOpacity,
+        weight: key === 'river' ? 0 : 1,
+        dashArray: key === 'q500' ? '6 4' : (key === 'q100' ? '4 3' : null),
+      }).bindTooltip(zone.label, { sticky: true }).addTo(g)
+    })
+  })
+
+  // Legend
+  const legend = L.control({ position: 'bottomleft' })
+  legend.onAdd = () => {
+    const div = L.DomUtil.create('div', 'flood-legend')
+    div.style.cssText = `
+      background:rgba(13,21,38,0.92);border:1px solid #1e3a5f;
+      border-radius:6px;padding:10px 14px;color:#e8edf5;font-size:11px;
+      line-height:1.8;pointer-events:none;
+    `
+    div.innerHTML = `
+      <b style="color:#4fc3f7;font-size:12px">🌊 Tereny zalewowe — San</b><br>
+      <span style="display:inline-block;width:10px;height:10px;background:#1565c0;border-radius:2px;margin-right:6px;opacity:0.8"></span>Q10 — raz na 10 lat<br>
+      <span style="display:inline-block;width:10px;height:10px;background:#2196f3;border-radius:2px;margin-right:6px;opacity:0.8"></span>Q100 — raz na 100 lat<br>
+      <span style="display:inline-block;width:10px;height:10px;background:#4fc3f7;border-radius:2px;margin-right:6px;opacity:0.8"></span>Q500 — raz na 500 lat<br>
+      <span style="color:var(--text-muted);font-size:10px">Źródło: IMGW ISOK · RZGW Rzeszów</span>
+    `
+    return div
+  }
+  legend.addTo(map)
+
+  // Store legend reference for removal
+  g._floodLegend = legend
+  const origRemove = g.remove.bind(g)
+  g.remove = () => { legend.remove(); origRemove() }
+
+  g.addTo(map)
+  overlayLayers.flood = g
 }
 
 // ---- Cascade Button — wywołuje prawdziwe API ----
@@ -346,6 +566,9 @@ export function resetMap() {
       marker.setIcon(buildNodeIcon(marker._node))
     }
   })
+
+  // Resetuj kolory sektorów
+  Object.keys(sectorPolygons).forEach(label => colorSector(label, 'clear'))
 
   map.flyTo(STALOWA_WOLA_CENTER, 14, { duration: 0.8 })
 }

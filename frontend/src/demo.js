@@ -2,7 +2,7 @@
 // STEEL SENTINEL — Demo Scenario Controller
 // ============================================================
 import { showAlert, closeAlert, showMobileNotif, showCascade, toast } from './ui.js'
-import { spawnDrone1, destroyDrone1, spawnDrone2, impactDrone2, resetMap } from './map.js'
+import { spawnDrone1, destroyDrone1, spawnDrone2, impactDrone2, resetMap, colorSector } from './map.js'
 import { detectThreat, interceptThreat, evacuate } from './api.js'
 import { addThreat, updateThreatStatus, clearThreats } from './threats.js'
 
@@ -31,6 +31,9 @@ async function step1() {
   // Wywołaj backend
   const result = await detectThreat(50.5731, 22.0442, 'aerial_drone')
   threatId1 = result?.threat_id ?? 1
+
+  // Koloruj sektor zagrożony
+  colorSector('A', 'threat')
 
   // Dodaj do threats view
   addThreat({
@@ -107,6 +110,7 @@ async function step3() {
 
   await interceptThreat(threatId1, 3)
   updateThreatStatus(threatId1, 'intercepted')
+  colorSector('A', 'clear')
 
   setTimeout(() => {
     showAlert({
@@ -134,6 +138,10 @@ async function step4() {
 
   const result = await detectThreat(50.5900, 22.0610, 'aerial_drone')
   threatId2 = result?.threat_id ?? 2
+
+  // Sektor C — zagrożenie, sektory B i D — narażone kaskadowo
+  colorSector('C', 'threat')
+  colorSector('B', 'cascade')
 
   addThreat({
     id: threatId2,
@@ -214,6 +222,10 @@ function step6() {
   closeAlert()
   impactDrone2()
   updateThreatStatus(threatId2, 'impact')
+  // Uderzenie — sektor C zniszczony, kaskada na B i D
+  colorSector('C', 'threat')
+  colorSector('B', 'cascade')
+  colorSector('D', 'cascade')
 
   setTimeout(() => {
     showAlert({

@@ -880,3 +880,32 @@ b { color: var(--text-primary); }
   color: var(--accent);
   font-weight: 700;
 }
+
+/* ── GPS Jam pulse animation ─────────────────────────── */
+@keyframes pulse-jam {
+  0%   { box-shadow: 0 0 0 0 rgba(255,152,0,0.6) }
+  70%  { box-shadow: 0 0 0 10px rgba(255,152,0,0) }
+  100% { box-shadow: 0 0 0 0 rgba(255,152,0,0) }
+}
+
+/* ── Sector threat tooltips ──────────────────────────── */
+.sector-threat-tooltip {
+  background: rgba(239,83,80,0.92) !important;
+  border: 1px solid #ef5350 !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+}
+.sector-cascade-tooltip {
+  background: rgba(255,152,0,0.92) !important;
+  border: 1px solid #ff9800 !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+}
+
+/* ── Flood legend ────────────────────────────────────── */
+.flood-legend {
+  pointer-events: none;
+  margin-bottom: 30px;
+}
