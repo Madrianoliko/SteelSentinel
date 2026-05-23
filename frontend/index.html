@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Steel Sentinel — System Ochrony Infrastruktury Krytycznej</title>
+
+  <!-- Leaflet.js -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- vis.js (graf zależności) -->
+  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <span class="logo">🛡️ STEEL SENTINEL</span>
+      <span class="subtitle">System Ochrony Infrastruktury Krytycznej — Stalowa Wola</span>
+    </div>
+    <div class="header-right">
+      <span class="status-indicator active">● SYSTEM AKTYWNY</span>
+      <span id="clock" class="clock"></span>
+    </div>
+  </header>
+
+  <!-- TABS -->
+  <nav class="tabs">
+    <button class="tab active" onclick="switchView('map')">🗺️ Widok Operatorski</button>
+    <button class="tab" onclick="switchView('graph')">🔗 Graf Zależności</button>
+    <button class="tab" onclick="switchView('threats')">⚠️ Zagrożenia</button>
+  </nav>
+
+  <!-- MAP VIEW -->
+  <div id="view-map" class="view active">
+    <div id="map"></div>
+
+    <!-- PANEL BOCZNY -->
+    <div class="side-panel">
+      <h3>Infrastruktura krytyczna</h3>
+      <div class="filter-group">
+        <label><input type="checkbox" checked data-layer="energy"> ⚡ Energetyczna</label>
+        <label><input type="checkbox" checked data-layer="water"> 💧 Wodociągowa</label>
+        <label><input type="checkbox" checked data-layer="health"> 🏥 Ochrona zdrowia</label>
+        <label><input type="checkbox" checked data-layer="transport"> 🚗 Transportowa</label>
+        <label><input type="checkbox" checked data-layer="telecom"> 📡 Łączność</label>
+        <label><input type="checkbox" checked data-layer="industrial"> 🏭 Przemysłowa</label>
+        <label><input type="checkbox" checked data-layer="administration"> 🏛️ Administracja</label>
+        <label><input type="checkbox" checked data-layer="rescue"> 🚒 Ratownicza</label>
+      </div>
+
+      <h3>Warstwy</h3>
+      <div class="filter-group">
+        <label><input type="checkbox" id="layer-sensors"> 📷 Sensory IMINT</label>
+        <label><input type="checkbox" id="layer-threats"> 🎯 Zagrożenia</label>
+        <label><input type="checkbox" id="layer-sectors"> 🔲 Sektory</label>
+      </div>
+
+      <div id="node-detail" class="node-detail hidden">
+        <h3 id="node-name">—</h3>
+        <p id="node-category">—</p>
+        <div id="node-resources"></div>
+        <button onclick="showCascade()" class="btn-cascade">📊 Analiza kaskadowa</button>
+      </div>
+    </div>
+
+    <!-- DEMO CONTROL (operator panel) -->
+    <div class="demo-panel" id="demo-panel">
+      <div class="demo-title">⌨️ DEMO MODE</div>
+      <div class="demo-hint">Użyj klawiszy 1–6 lub przycisków:</div>
+      <button onclick="demoStep(1)" class="demo-btn">1 — Wykryj drona #1</button>
+      <button onclick="demoStep(2)" class="demo-btn">2 — Rekomendacja AI</button>
+      <button onclick="demoStep(3)" class="demo-btn">3 — Zestrzel #1 ✓</button>
+      <button onclick="demoStep(4)" class="demo-btn">4 — Wykryj drona #2</button>
+      <button onclick="demoStep(5)" class="demo-btn">5 — Brak zasobów</button>
+      <button onclick="demoStep(6)" class="demo-btn">6 — Uderzenie + kaskada</button>
+      <button onclick="demoReset()" class="demo-btn reset">R — Reset</button>
+    </div>
+  </div>
+
+  <!-- GRAPH VIEW -->
+  <div id="view-graph" class="view">
+    <div id="graph-container"></div>
+    <div class="graph-legend">
+      <h3>Typy zależności</h3>
+      <span class="legend-item power">━ Zasilanie</span>
+      <span class="legend-item water">━ Woda</span>
+      <span class="legend-item telecom">━ Łączność</span>
+      <span class="legend-item transport">━ Transport</span>
+    </div>
+  </div>
+
+  <!-- THREATS VIEW -->
+  <div id="view-threats" class="view">
+    <div id="threats-list">
+      <h2>Aktywne zagrożenia</h2>
+      <p class="empty-state">Brak aktywnych zagrożeń. System monitoruje obszar.</p>
+    </div>
+  </div>
+
+  <!-- ALERT OVERLAY -->
+  <div id="alert-overlay" class="alert-overlay hidden">
+    <div class="alert-box" id="alert-box">
+      <div class="alert-icon" id="alert-icon">⚠️</div>
+      <h2 id="alert-title">WYKRYTO ZAGROŻENIE</h2>
+      <p id="alert-body">Dron przeciwnika zbliża się od wschodu.</p>
+      <div id="alert-buttons"></div>
+    </div>
+  </div>
+
+  <!-- MOBILE NOTIFICATION MOCKUP -->
+  <div id="mobile-notif" class="mobile-notif hidden">
+    <div class="mobile-notif-bar">📱 Steel Sentinel</div>
+    <div class="mobile-notif-body" id="mobile-notif-body">
+      ⚠️ ALERT LOTNICZY — Sektor B<br>
+      Wykryto wrogie BSP. Udaj się do schronu.
+    </div>
+  </div>
+
+  <!-- CASCADE IMPACT PANEL -->
+  <div id="cascade-panel" class="cascade-panel hidden">
+    <h3>🔴 Analiza kaskadowa — skutki uderzenia</h3>
+    <div id="cascade-list"></div>
+    <button onclick="document.getElementById('cascade-panel').classList.add('hidden')">✕ Zamknij</button>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/graph.js"></script>
+  <script src="js/demo.js"></script>
+</body>
+</html>
