@@ -124,8 +124,8 @@ export function toggleGpsJam(visible) {
 
   const COLORS = {
     high:   { stroke: '#ef5350', fill: '#ef5350', opacity: 0.55, fillOpacity: 0.35 },
-    medium: { stroke: '#ff9800', fill: '#ff9800', opacity: 0.45, fillOpacity: 0.22 },
-    low:    { stroke: '#ffeb3b', fill: '#ffeb3b', opacity: 0.30, fillOpacity: 0.10 },
+    medium: { stroke: '#ffeb3b', fill: '#ffeb3b', opacity: 0.45, fillOpacity: 0.22 },
+    low:    { stroke: '#00e676', fill: '#00e676', opacity: 0.30, fillOpacity: 0.10 },
   }
 
   const LABELS = { high: '🔴 Wysokie', medium: '🟡 Średnie', low: '🟢 Niskie' }
@@ -158,8 +158,8 @@ export function toggleGpsJam(visible) {
     div.innerHTML = `
       <b style="color:#ff9800;font-size:12px">🛰️ Zagłuszanie GPS</b><br>
       <span style="display:inline-block;width:10px;height:10px;background:#ef5350;border-radius:2px;margin-right:6px;opacity:0.9"></span>Wysokie (&gt;10%)<br>
-      <span style="display:inline-block;width:10px;height:10px;background:#ff9800;border-radius:2px;margin-right:6px;opacity:0.9"></span>Średnie (2–10%)<br>
-      <span style="display:inline-block;width:10px;height:10px;background:#ffeb3b;border-radius:2px;margin-right:6px;opacity:0.9"></span>Niskie (&lt;2%)<br>
+      <span style="display:inline-block;width:10px;height:10px;background:#ffeb3b;border-radius:2px;margin-right:6px;opacity:0.9"></span>Średnie (2–10%)<br>
+      <span style="display:inline-block;width:10px;height:10px;background:#00e676;border-radius:2px;margin-right:6px;opacity:0.9"></span>Niskie (&lt;2%)<br>
       <span style="color:var(--text-muted);font-size:10px">Źródło: gpsjam.org · adsbexchange.com</span>
     `
     return div
