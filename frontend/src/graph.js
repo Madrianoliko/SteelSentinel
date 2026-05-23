@@ -25,6 +25,7 @@ const GROUP_STYLES = {
   rescue:         { background: '#1a1000', border: '#ffcc80' },
   chemical:       { background: '#1a0a00', border: '#ff8a65' },
   food:           { background: '#0a1a00', border: '#c5e1a5' },
+  education:      { background: '#1a1500', border: '#ffe082' },
 }
 
 export function initGraph(nodes) {
