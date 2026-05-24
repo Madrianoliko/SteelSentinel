@@ -3,6 +3,12 @@
 > **SpaceShield Hack 2026** | Kategoria: DEFENCE  
 > Stalowa Wola, 23–24 maja 2026
 
+**🌐 Demo na żywo: [stalowywojownik.pl](https://stalowywojownik.pl)**
+
+---
+
+![Steel Sentinel — widok operatorski](screen.png)
+
 ---
 
 ## Czym jest Steel Sentinel?
@@ -126,21 +132,22 @@ Obiekty infrastruktury krytycznej zgodnie z Ustawą o zarządzaniu kryzysowym, z
 ```
 ┌─────────────────────────────────────────────────────┐
 │                   FRONTEND                          │
-│   Leaflet.js (mapa) + vis.js (graf zależności)      │
-│   Widok Operatorski | Widok Ekspercki               │
+│   Vite + Leaflet.js (mapa) + vis.js (graf)          │
+│   Responsywny UI (desktop + mobile)                 │
 └────────────────────┬────────────────────────────────┘
                      │ REST API
 ┌────────────────────▼────────────────────────────────┐
 │                   BACKEND                           │
-│              Python + FastAPI                       │
+│              Python 3.11 + FastAPI                  │
 │   /infrastructure  /graph  /threats  /scenarios     │
 └────────────────────┬────────────────────────────────┘
-                     │ SQLAlchemy
+                     │ SQLAlchemy + Alembic
 ┌────────────────────▼────────────────────────────────┐
 │                  DATABASE                           │
-│              PostgreSQL                             │
+│              PostgreSQL (Railway)                   │
 │   nodes (infrastruktura) + edges (zależności)       │
 └─────────────────────────────────────────────────────┘
+                     ☁️ Deployment: Railway.app
 ```
 
 ---
@@ -151,38 +158,37 @@ Obiekty infrastruktury krytycznej zgodnie z Ustawą o zarządzaniu kryzysowym, z
 SteelSentinel/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI entry point
+│   │   ├── main.py              # FastAPI entry point + static files
 │   │   ├── database.py          # SQLAlchemy + PostgreSQL connection
 │   │   ├── models/
-│   │   │   ├── infrastructure.py  # Model węzłów infrastruktury
-│   │   │   ├── graph.py           # Model krawędzi zależności
-│   │   │   └── threat.py          # Model scenariuszy zagrożeń
+│   │   │   ├── infrastructure.py
+│   │   │   ├── graph.py
+│   │   │   └── threat.py
 │   │   └── routers/
 │   │       ├── infrastructure.py  # GET /infrastructure
 │   │       ├── graph.py           # GET /graph
 │   │       ├── threats.py         # POST /simulate
-│   │       └── scenarios.py       # GET /scenarios
+│   │       └── scenarios.py
 │   ├── alembic/                 # Migracje bazy danych
-│   ├── requirements.txt
-│   ├── .env.example
-│   └── Dockerfile
+│   ├── seed.py                  # Seed danych (idempotentny)
+│   └── requirements.txt
 ├── frontend/
-│   ├── index.html               # Główna aplikacja
-│   ├── css/
-│   │   └── style.css
-│   └── js/
+│   ├── index.html               # Główna aplikacja (SPA)
+│   └── src/
+│       ├── main.js              # Entry point
 │       ├── map.js               # Leaflet.js — mapa i warstwy
 │       ├── graph.js             # vis.js — graf zależności
-│       ├── demo.js              # Keyboard triggers dla scenariusza demo
-│       └── api.js               # Komunikacja z backendem
+│       ├── demo.js              # Scenariusz demo (animacje, kroki)
+│       ├── threats.js           # Rejestr zagrożeń
+│       ├── ui.js                # UI: sidebar, alerty, node detail
+│       ├── api.js               # Komunikacja z backendem
+│       ├── data.js              # Dane lokalne (kategorie, węzły)
+│       └── style.css            # Stylowanie + responsive
 ├── data/
-│   └── seed/
-│       ├── infrastructure.json  # Dane infrastruktury Stalowej Woli
-│       └── edges.json           # Zależności między obiektami
-├── docs/
-│   └── architecture.md
-├── docker-compose.yml
-├── .gitignore
+│   └── screen.png               # Screenshot aplikacji
+├── Dockerfile                   # Multi-stage build (Node + Python)
+├── railway.toml                 # Konfiguracja Railway
+├── start.sh                     # Skrypt startowy (migracje + seed + uvicorn)
 └── README.md
 ```
 
@@ -202,6 +208,7 @@ Zgodnie z Ustawą o zarządzaniu kryzysowym (Dz.U. 2007 nr 89 poz. 590):
 | Administracja | Urząd Miasta, komendy służb |
 | Przemysłowa | HSW S.A. (produkcja obronna) |
 | Chemiczna | Zbiorniki paliw, rurociągi |
+| Schrony | Schrony i miejsca ewakuacji dla ludności |
 
 ---
 
@@ -219,44 +226,48 @@ Analiza tras podejścia, blokady, rozmieszczenia sił.
 
 ---
 
-## Demo — Keyboard Triggers
+## Demo — uruchomienie scenariusza
 
-Podczas demonstracji wideo używamy skrótów klawiszowych do wyzwalania kolejnych kroków scenariusza:
+Podczas demonstracji używamy panelu demo widocznego w lewym dolnym rogu ekranu lub skrótu klawiszowego:
 
-| Klawisz | Akcja |
-|---------|-------|
-| `1` | Wykrycie drona #1 (pojawia się na mapie, leci po trasie) |
-| `2` | Rekomendacja AI (popup z przyciskiem Zestrzel) |
-| `3` | Zestrzelenie drona #1 (animacja sukcesu) |
-| `4` | Wykrycie drona #2 (drugi cel) |
-| `5` | Brak zasobów (komunikat + przycisk Ewakuuj) |
-| `6` | Uderzenie + kaskada skutków (sektor czerwony, lista zniszczeń) |
-| `R` | Reset scenariusza |
+| Akcja | Sposób uruchomienia |
+|-------|---------------------|
+| Uruchom scenariusz | Przycisk **▶ Demo** lub klawisz `1` |
+| Reset scenariusza | Przycisk **↺ Reset** lub klawisz `R` |
+
+Scenariusz uruchamia się automatycznie krok po kroku:
+1. Włączenie warstwy ochrony powietrznej + wykrycie drona #1 (animacja lotu po mapie)
+2. Rekomendacja AI z uzasadnieniem (zasięg, czas reakcji, p-stwo trafienia)
+3. Zestrzelenie drona #1 → automatyczne przejście do kroku 4
+4. Wykrycie drona #2 (drugi cel)
+5. Brak zasobów — komunikat ewakuacyjny
+6. Uderzenie + pełna analiza kaskadowa (modal centralny) → rekomendacje naprawcze AI → podgląd w grafie zależności
 
 ---
 
 ## Szybki start
 
-### Wymagania
-- Python 3.11+
-- PostgreSQL 15+
-- Node.js (opcjonalnie, do live-reload frontendu)
-- Docker + Docker Compose (zalecane)
+### Wersja produkcyjna (bez instalacji)
 
-### Uruchomienie przez Docker (zalecane)
+Aplikacja dostępna pod: **[stalowywojownik.pl](https://stalowywojownik.pl)**
+
+### Uruchomienie lokalne przez Docker
 
 ```bash
 git clone https://github.com/Madrianoliko/SteelSentinel.git
 cd SteelSentinel
-cp backend/.env.example backend/.env
-docker-compose up -d
+
+# Ustaw zmienną środowiskową bazy danych
+export DATABASE_URL=postgresql://user:pass@localhost:5432/steelsentinel
+
+docker build -t steelsentinel .
+docker run -p 8000:8000 -e DATABASE_URL=$DATABASE_URL steelsentinel
 ```
 
 Aplikacja dostępna pod: http://localhost:8000  
-Frontend pod: http://localhost:3000  
 Swagger API: http://localhost:8000/docs
 
-### Uruchomienie manualne
+### Uruchomienie manualne (development)
 
 ```bash
 # Backend
@@ -265,11 +276,14 @@ python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env      # uzupełnij dane PostgreSQL
+alembic upgrade head
+python seed.py
 uvicorn app.main:app --reload
 
-# Frontend
-# Otwórz frontend/index.html w przeglądarce
-# lub użyj live-server: npx live-server frontend/
+# Frontend (dev server z hot reload)
+cd frontend
+npm install
+npm run dev
 ```
 
 ---
@@ -292,12 +306,15 @@ uvicorn app.main:app --reload
 
 | Warstwa | Technologia |
 |---------|-------------|
+| Frontend — bundler | Vite |
 | Frontend — mapa | Leaflet.js |
-| Frontend — graf | vis.js |
+| Frontend — graf | vis.js (vis-network) |
+| Frontend — UI | Vanilla JS + CSS (responsive, mobile-first) |
 | Backend | Python 3.11 + FastAPI |
-| ORM | SQLAlchemy 2.0 + Alembic |
+| ORM / migracje | SQLAlchemy 2.0 + Alembic |
 | Baza danych | PostgreSQL 15 |
-| Konteneryzacja | Docker + Docker Compose |
+| Deployment | Railway.app |
+| Konteneryzacja | Docker (multi-stage build) |
 | Licencja | MIT (Open Source — wymaganie regulaminu) |
 
 ---
