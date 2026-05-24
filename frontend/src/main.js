@@ -3,13 +3,13 @@
 // ============================================================
 import './style.css'
 import { fetchInfrastructure } from './api.js'
-import { initMap, toggleCategory, toggleSensors, toggleGpsJam, toggleSectors, toggleCuav, toggleFlood, toggleAirDefense } from './map.js'
-import { initGraph, renderBottlenecks } from './graph.js'
+import { initMap, updateAllCategoryCounts, toggleCategory, toggleSensors, toggleGpsJam, toggleSectors, toggleCuav, toggleFlood, toggleAirDefense, setBaseLayer } from './map.js'
+import { initGraph, renderBottlenecks, setGraphMode } from './graph.js'
 import { runDemoStep } from './demo.js'
 import { initThreatsView } from './threats.js'
 import {
-  startClock, initNav, initCategoryFilters, initDemoPanel,
-  initCascadeClose, showNodeDetail
+  startClock, initNav, initCategoryFilters, initFilterToggle,
+  initDemoPanel, initCascadeClose, showNodeDetail
 } from './ui.js'
 import { CATEGORIES } from './data.js'
 
@@ -22,8 +22,17 @@ async function main() {
   // Init map
   initMap(nodes)
 
-  // Category filters
+  // Filter bar toggle (hamburger button)
+  initFilterToggle()
+
+  // Category filters — must run before updateAllCategoryCounts so DOM elements exist
   initCategoryFilters(CATEGORIES, (category, visible) => toggleCategory(category, visible))
+  updateAllCategoryCounts(nodes)
+
+  // Basemap selector
+  document.querySelectorAll('.basemap-btn').forEach(btn => {
+    btn.addEventListener('click', () => setBaseLayer(btn.dataset.basemap))
+  })
 
   // Layer toggles
   document.getElementById('toggle-sensors').addEventListener('change', e => toggleSensors(e.target.checked))
@@ -39,16 +48,30 @@ async function main() {
   // Cascade close
   initCascadeClose()
 
-  // Threats view — badge z liczbą aktywnych zagrożeń
+  // Stat cards — fill critical count from data
+  const critCount = nodes.filter(n => n.risk === 'critical').length
+  const statCritEl = document.getElementById('stat-critical')
+  if (statCritEl) statCritEl.textContent = critCount
+  const statObjEl = document.getElementById('stat-objects')
+  if (statObjEl) statObjEl.textContent = nodes.length
+
+  // Threats view — badge + stat-threats counter
   initThreatsView((count) => {
     const badge = document.getElementById('threats-badge')
-    if (!badge) return
-    if (count > 0) {
+    if (badge) {
       badge.textContent = count
-      badge.style.display = 'inline-block'
-    } else {
-      badge.style.display = 'none'
+      badge.style.display = count > 0 ? 'inline-block' : 'none'
     }
+    const statThreat = document.getElementById('stat-threats')
+    if (statThreat) {
+      statThreat.textContent = count
+      statThreat.className = `stat-val${count > 0 ? ' danger' : ' ok'}`
+    }
+  })
+
+  // Graph mode buttons
+  document.querySelectorAll('.graph-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => setGraphMode(btn.dataset.mode))
   })
 
   // Navigation — lazy init graph on switch

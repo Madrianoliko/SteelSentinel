@@ -18,6 +18,55 @@ const sectorPolygons = {}  // label → L.polygon
 const nodeMarkers = {}      // nodeId → marker
 const demoPolylines = []    // wszystkie linie drona
 
+// ---- Basemap config ----
+const BASE_LAYERS = {
+  carto: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    opts: { maxZoom: 19, subdomains: ['a', 'b', 'c', 'd'] },
+    filter: 'none',
+  },
+  dark: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    opts: { maxZoom: 19, subdomains: ['a', 'b', 'c'] },
+    filter: 'invert(1) hue-rotate(200deg) brightness(0.85) saturate(0.4)',
+  },
+  standard: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    opts: { maxZoom: 19, subdomains: ['a', 'b', 'c'] },
+    filter: 'none',
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    opts: { maxZoom: 19 },
+    filter: 'none',
+  },
+  topo: {
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    opts: { maxZoom: 17, subdomains: ['a', 'b', 'c'] },
+    filter: 'invert(1) hue-rotate(200deg) brightness(0.8) saturate(0.3)',
+  },
+}
+
+let currentBaseLayer = null
+let currentBaseKey   = 'dark'
+
+export function setBaseLayer(key) {
+  const cfg = BASE_LAYERS[key]
+  if (!cfg || !map) return
+  if (currentBaseLayer) map.removeLayer(currentBaseLayer)
+  currentBaseLayer = L.tileLayer(cfg.url, cfg.opts).addTo(map)
+  // Push it below all overlay layers
+  currentBaseLayer.setZIndex(0)
+  // Apply CSS filter on the tile pane
+  const pane = document.querySelector('.leaflet-tile-pane')
+  if (pane) pane.style.filter = cfg.filter
+  currentBaseKey = key
+  // Update active button
+  document.querySelectorAll('.basemap-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.basemap === key)
+  })
+}
+
 // ---- Init ----
 export function initMap(nodes) {
   map = L.map('map', {
@@ -27,11 +76,10 @@ export function initMap(nodes) {
     attributionControl: false,
   })
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19,
-  }).addTo(map)
+  // Dark tactical basemap: OSM tiles + CSS invert/hue-rotate (reliable, no CDN dependency)
+  currentBaseLayer = L.tileLayer(BASE_LAYERS.dark.url, BASE_LAYERS.dark.opts).addTo(map)
 
-  L.control.attribution({ prefix: '© OpenStreetMap · © CARTO' }).addTo(map)
+  L.control.attribution({ prefix: '© OpenStreetMap contributors' }).addTo(map)
 
   Object.keys(CATEGORIES).forEach(cat => {
     layerGroups[cat] = L.layerGroup().addTo(map)
@@ -39,28 +87,51 @@ export function initMap(nodes) {
 
   nodes.forEach(addNodeMarker)
 
-  Object.keys(CATEGORIES).forEach(cat => {
-    updateCategoryCount(cat, nodes.filter(n => n.category === cat).length)
-  })
-
   return map
 }
 
+// Call this after initCategoryFilters() so DOM count elements exist
+export function updateAllCategoryCounts(nodes) {
+  Object.keys(CATEGORIES).forEach(cat => {
+    updateCategoryCount(cat, nodes.filter(n => n.category === cat).length)
+  })
+}
+
 // ---- Markers ----
+// Category → ring color (matches CATEGORIES colors in data.js)
+const CAT_COLORS = {
+  energy:         '#ffeb3b',
+  water:          '#4fc3f7',
+  health:         '#f48fb1',
+  transport:      '#a5d6a7',
+  telecom:        '#ce93d8',
+  industrial:     '#ef9a9a',
+  administration: '#90caf9',
+  rescue:         '#ffcc80',
+  chemical:       '#ff8a65',
+  food:           '#c5e1a5',
+  education:      '#ffe082',
+}
+
 function buildNodeIcon(node) {
   const cat = CATEGORIES[node.category]
+  const color = CAT_COLORS[node.category] ?? '#90caf9'
+  const isCritical  = node.risk === 'critical'
+  const isHigh      = node.risk === 'high'
+  const borderWidth = isCritical ? '2.5px' : '2px'
+  const riskClass   = `risk-${node.risk}`
   return L.divIcon({
-    html: `<div class="marker-pin risk-${node.risk}"><span class="pin-icon">${cat?.icon ?? '📍'}</span></div>`,
+    html: `<div class="node-badge ${riskClass}" style="--cat-color:${color};border-width:${borderWidth};">`
+          + `<span class="node-icon">${cat?.icon ?? '📍'}</span></div>`,
     className: '',
-    iconSize: [34, 34],
-    iconAnchor: [17, 34],
-    popupAnchor: [0, -36],
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -18],
   })
 }
 
 function addNodeMarker(node) {
   const marker = L.marker([node.lat, node.lng], { icon: buildNodeIcon(node) })
-    .bindPopup(buildPopup(node))
     .on('click', () => {
       showNodeDetail(node)
       setupCascadeBtn(node)
@@ -176,28 +247,43 @@ export function toggleGpsJam(visible) {
 }
 
 // ── SECTOR POLYGONS ──────────────────────────────────────────────────────────
-// Stalowa Wola podzielona na 4 sektory operacyjne
+// Powiat stalowowolski — siatka 3×4 = 12 sektorów operacyjnych
+// Granice: N 50.725 · S 50.400 · W 21.920 · E 22.300
+// Wiersze (N→S): A-C / D-F / G-I / J-L
+// Kolumny (W→E): lewa / środkowa / prawa
+const _R = [50.725, 50.644, 50.562, 50.481, 50.400]  // lat row boundaries N→S
+const _C = [21.920, 22.047, 22.173, 22.300]           // lng col boundaries W→E
+
+function _sec(label, row, col, color) {
+  const n = _R[row], s = _R[row + 1]
+  const w = _C[col], e = _C[col + 1]
+  return {
+    label, color,
+    coords: [[n, w], [n, e], [s, e], [s, w]],
+    center: [(n + s) / 2, (w + e) / 2],
+  }
+}
+
 const SECTOR_DEFS = [
-  {
-    label: 'A', color: '#90caf9',
-    coords: [[50.570, 22.030], [50.585, 22.030], [50.585, 22.050], [50.570, 22.050]],
-    center: [50.577, 22.040],
-  },
-  {
-    label: 'B', color: '#90caf9',
-    coords: [[50.570, 22.050], [50.595, 22.050], [50.595, 22.065], [50.570, 22.065]],
-    center: [50.582, 22.057],
-  },
-  {
-    label: 'C', color: '#90caf9',
-    coords: [[50.595, 22.050], [50.615, 22.050], [50.615, 22.075], [50.595, 22.075]],
-    center: [50.605, 22.062],
-  },
-  {
-    label: 'D', color: '#90caf9',
-    coords: [[50.555, 22.035], [50.570, 22.035], [50.570, 22.070], [50.555, 22.070]],
-    center: [50.562, 22.052],
-  },
+  // Row 1 — north (Zaklków / Rudnik nad Sanem)
+  _sec('A', 0, 0, '#80cbc4'),  // NW — Zaklków west
+  _sec('B', 0, 1, '#80cbc4'),  // N  — Zaklków east
+  _sec('C', 0, 2, '#80cbc4'),  // NE — Rudnik nad Sanem north
+
+  // Row 2 — Stalowa Wola / San river area
+  _sec('D', 1, 0, '#90caf9'),  // W  — HSW / Stalowa Wola west  ← demo
+  _sec('E', 1, 1, '#90caf9'),  // C  — Stalowa Wola / Rozwadów  ← demo cascade
+  _sec('F', 1, 2, '#90caf9'),  // E  — Pysznica / San east       ← demo threat 2
+
+  // Row 3 — south Stalowa Wola / north Nisko
+  _sec('G', 2, 0, '#ce93d8'),  // SW — Pniów area
+  _sec('H', 2, 1, '#ce93d8'),  // S  — Nisko north               ← demo cascade
+  _sec('I', 2, 2, '#ce93d8'),  // SE — Nisko northeast
+
+  // Row 4 — south (Nisko / south powiat)
+  _sec('J', 3, 0, '#ffcc80'),  // far SW
+  _sec('K', 3, 1, '#ffcc80'),  // far S — Nisko center
+  _sec('L', 3, 2, '#ffcc80'),  // far SE
 ]
 
 export function toggleSectors(visible) {
@@ -599,16 +685,36 @@ function setupCascadeBtn(node) {
 let droneMarker1 = null, droneMarker2 = null
 let droneInterval1 = null, droneInterval2 = null
 let impactCircle = null
+let parkedHeliMarker = null  // Alfa-3 stacjonuje w miejscu przechwycenia
 
+// Dron #1: Pysznica (wschód) → Błonia Nadsańskie (detekcja) → HSW (cel)
 const DRONE1_PATH = [
-  [50.5831, 22.1800], [50.5810, 22.1500], [50.5790, 22.1200],
-  [50.5770, 22.1000], [50.5750, 22.0800], [50.5740, 22.0600], [50.5731, 22.0442],
+  [50.5815, 22.2300],  // start: wschód, Pysznica
+  [50.5808, 22.2000],  // zbliżanie
+  [50.5800, 22.1700],  // przekracza San
+  [50.5793, 22.1400],  // wchodzi w Błonia Nadsańskie ← audio-east wykrywa
+  [50.5787, 22.1150],  // środek Błoni ← kamera IMINT-East potwierdza
+  [50.5778, 22.0950],  // koniec Błoni
+  [50.5765, 22.0750],  // wlot do zabudowy
+  [50.5748, 22.0560],  // strefa HSW
+  [50.5731, 22.0442],  // cel: HSW S.A.
 ]
+
+// Indeks punktu gdzie dron jest "wykryty" — Błonia Nadsańskie
+const DRONE1_DETECT_IDX = 4
 
 const DRONE2_PATH = [
-  [50.6300, 22.0700], [50.6200, 22.0680], [50.6100, 22.0660],
-  [50.5980, 22.0645], [50.5945, 22.0680], [50.5900, 22.0610],
+  [50.6300, 22.0700],  // 0 — start: północ (Nisko)
+  [50.6200, 22.0680],  // 1
+  [50.6100, 22.0660],  // 2
+  [50.5980, 22.0645],  // 3 ← wykrycie: sensor audio Brandwica
+  [50.5920, 22.0640],  // 4
+  [50.5860, 22.0600],  // 5
+  [50.5800, 22.0570],  // 6
+  [50.5748, 22.0620],  // 7 — cel: Elektrociepłownia SW
 ]
+// Indeks punktu gdzie dron #2 jest wykryty przez sensor audio (Brandwica)
+const DRONE2_DETECT_IDX = 3
 
 function makeDroneIcon(color = '#ef5350') {
   return L.divIcon({
@@ -617,84 +723,323 @@ function makeDroneIcon(color = '#ef5350') {
   })
 }
 
+function makeRadarBlipIcon() {
+  return L.divIcon({
+    html: `<div style="
+      width:14px;height:14px;border-radius:50%;
+      background:#ef5350;
+      box-shadow:0 0 0 3px rgba(239,83,80,0.3),0 0 12px rgba(239,83,80,0.8);
+      animation:pulse-critical 1s ease-in-out infinite;
+    "></div>`,
+    className: '', iconSize: [14, 14], iconAnchor: [7, 7],
+  })
+}
+
+function makeIdentifiedDroneIcon() {
+  return L.divIcon({
+    html: `<img src="/dronkrok1.png" style="width:38px;height:38px;object-fit:contain;filter:drop-shadow(0 0 8px #ef5350) drop-shadow(0 0 4px rgba(239,83,80,0.6));animation:drone-bob 0.7s ease-in-out infinite alternate;" />`,
+    className: '', iconSize: [38, 38], iconAnchor: [19, 19],
+  })
+}
+
 function trackPolyline(polyline) {
   demoPolylines.push(polyline)
   return polyline
 }
 
-export function spawnDrone1(onReach) {
+export function spawnDrone1(onDetect) {
   clearDrone1()
-  map.flyTo([50.5750, 22.1000], 13, { duration: 0.8 })
-  droneMarker1 = L.marker(DRONE1_PATH[0], { icon: makeDroneIcon('#ef5350'), zIndexOffset: 2000 }).addTo(map)
 
-  trackPolyline(
-    L.polyline(DRONE1_PATH, { color: '#ef5350', weight: 1.5, dashArray: '6 4', opacity: 0.6 }).addTo(map)
-  )
+  droneMarker1 = L.marker(DRONE1_PATH[0], { icon: makeRadarBlipIcon(), zIndexOffset: 2000 }).addTo(map)
 
-  let i = 0
-  droneInterval1 = setInterval(() => {
-    i++
-    if (i < DRONE1_PATH.length) {
-      droneMarker1.setLatLng(DRONE1_PATH[i])
+  // Ślad drona — rośnie na bieżąco wraz z lotem (zaczyna od punktu startowego)
+  const droneTrail = L.polyline([DRONE1_PATH[0]], {
+    color: '#ff9800', weight: 1.5, dashArray: '6 4', opacity: 0.55,
+  }).addTo(map)
+  trackPolyline(droneTrail)
+
+  // Dron leci wzdłuż ścieżki do punktu detekcji — dokładnie 20 sekund
+  const DURATION = 20000
+  const segments = DRONE1_DETECT_IDX   // 4 odcinki
+  const startTime = performance.now()
+  let rafId1 = null
+
+  function animateDrone(now) {
+    const t = Math.min((now - startTime) / DURATION, 1)
+
+    // Interpolacja wzdłuż segmentów ścieżki
+    const segT    = t * segments
+    const segIdx  = Math.min(Math.floor(segT), segments - 1)
+    const segFrac = segT - segIdx
+    const a = DRONE1_PATH[segIdx]
+    const b = DRONE1_PATH[segIdx + 1]
+    const pos = [
+      a[0] + (b[0] - a[0]) * segFrac,
+      a[1] + (b[1] - a[1]) * segFrac,
+    ]
+    if (droneMarker1) droneMarker1.setLatLng(pos)
+    droneTrail.addLatLng(pos)
+
+    if (t < 1) {
+      rafId1 = requestAnimationFrame(animateDrone)
     } else {
-      clearInterval(droneInterval1)
-      onReach?.()
+      // Dron stanął w punkcie detekcji — zmień ikonę: radar blip → zidentyfikowany Shahed
+      const detPt = DRONE1_PATH[DRONE1_DETECT_IDX]
+      if (droneMarker1) {
+        droneMarker1.setLatLng(detPt)
+        droneMarker1.setIcon(makeIdentifiedDroneIcon())
+      }
+      rafId1 = null
+      if (onDetect) onDetect()
     }
-  }, 400)
+  }
+
+  rafId1 = requestAnimationFrame(animateDrone)
+
+  // Zapisz id do ewentualnego anulowania
+  droneInterval1 = { cancel: () => { if (rafId1) cancelAnimationFrame(rafId1) } }
 }
 
-export function destroyDrone1() {
+export function destroyDrone1(onComplete) {
   if (!droneMarker1) return
-  clearInterval(droneInterval1)
-  droneMarker1.setIcon(L.divIcon({ html: '<div style="font-size:28px">💥</div>', className: '', iconSize: [32, 32] }))
-  setTimeout(() => { if (droneMarker1) { map.removeLayer(droneMarker1); droneMarker1 = null } }, 1500)
+
+  // Dron startuje z punktu detekcji (gdzie stanął w spawnDrone1)
+  const detPt  = DRONE1_PATH[DRONE1_DETECT_IDX]   // [50.5787, 22.1150]
+  const hswPt  = DRONE1_PATH[DRONE1_PATH.length - 1] // [50.5731, 22.0442] — cel HSW
+
+  // Punkt przechwycenia — w połowie trasy detekcja→HSW
+  const interceptPt = [
+    (detPt[0] + hswPt[0]) / 2,
+    (detPt[1] + hswPt[1]) / 2,
+  ]
+
+  // Predykcja trasy — pojawia się dopiero po kliknięciu "Zestrzel"
+  trackPolyline(
+    L.polyline(DRONE1_PATH.slice(DRONE1_DETECT_IDX), {
+      color: '#ef5350', weight: 1.5, dashArray: '4 6', opacity: 0.4,
+    }).bindTooltip('⚠️ Predykcja trasy → HSW S.A.', { sticky: true }).addTo(map)
+  )
+
+  // Baza Alfa-3 (C-UAS operator)
+  const alfaBase = [50.5831, 22.0510]
+
+  // Przybliż mapę tak, żeby widać było całą akcję
+  map.flyTo([
+    (alfaBase[0] + interceptPt[0]) / 2,
+    (alfaBase[1] + interceptPt[1] + detPt[1]) / 3,
+  ], 13, { duration: 0.8 })
+
+  // Helikopter Alfa-3
+  const heliIcon = L.divIcon({
+    html: `<img src="/dronkrok3.png" style="width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 0 6px #00e676);animation:drone-bob 0.4s ease-in-out infinite alternate;" />`,
+    className: '', iconSize: [36, 36], iconAnchor: [18, 18],
+  })
+  const heliMarker = L.marker(alfaBase, { icon: heliIcon, zIndexOffset: 3000 }).addTo(map)
+  demoPolylines.push(heliMarker)
+
+  // Ślad helikoptera
+  const heliTrail = L.polyline([alfaBase], {
+    color: '#00e676', weight: 1.5, dashArray: '4 4', opacity: 0.6,
+  }).addTo(map)
+  demoPolylines.push(heliTrail)
+
+  // ── Animacja 10 sekund — oba obiekty lecą do punktu przechwycenia ──
+  const DURATION = 10000
+  const startTime = performance.now()
+
+  function lerp(a, b, t) { return a + (b - a) * t }
+
+  function animate(now) {
+    const t = Math.min((now - startTime) / DURATION, 1)
+
+    // Dron: punkt detekcji → punkt przechwycenia
+    if (droneMarker1) {
+      droneMarker1.setLatLng([
+        lerp(detPt[0], interceptPt[0], t),
+        lerp(detPt[1], interceptPt[1], t),
+      ])
+    }
+
+    // Helikopter: baza → punkt przechwycenia
+    const heliLat = lerp(alfaBase[0], interceptPt[0], t)
+    const heliLng = lerp(alfaBase[1], interceptPt[1], t)
+    heliMarker.setLatLng([heliLat, heliLng])
+    heliTrail.addLatLng([heliLat, heliLng])
+
+    if (t < 1) {
+      requestAnimationFrame(animate)
+      return
+    }
+
+    // ── t=1: przechwycenie! ──
+    map.flyTo(interceptPt, 15, { duration: 0.6 })
+
+    if (droneMarker1) {
+      droneMarker1.setIcon(L.divIcon({
+        html: '<div style="font-size:36px">💥</div>',
+        className: '', iconSize: [40, 40], iconAnchor: [20, 20],
+      }))
+      setTimeout(() => {
+        if (droneMarker1) { map.removeLayer(droneMarker1); droneMarker1 = null }
+        if (onComplete) onComplete()
+      }, 1600)
+    }
+
+    // Helikopter zostaje w miejscu przechwycenia jako PATROL
+    setTimeout(() => {
+      heliMarker.setIcon(L.divIcon({
+        html: `<img src="/dronkrok3.png" style="width:32px;height:32px;object-fit:contain;filter:drop-shadow(0 0 5px #00e676);animation:drone-bob 1.2s ease-in-out infinite alternate;" />
+               <div style="font-size:9px;font-weight:700;letter-spacing:0.5px;
+                 background:rgba(0,230,118,0.15);color:#00e676;
+                 border:1px solid #00e676;border-radius:3px;
+                 padding:1px 5px;margin-top:2px;white-space:nowrap;text-align:center">PATROL</div>`,
+        className: '', iconSize: [44, 38], iconAnchor: [22, 14],
+      }))
+      parkedHeliMarker = heliMarker
+    }, 1800)
+  }
+
+  requestAnimationFrame(animate)
 }
 
 export function clearDrone1() {
-  clearInterval(droneInterval1)
+  if (droneInterval1?.cancel) droneInterval1.cancel()
+  else clearInterval(droneInterval1)
+  droneInterval1 = null
   if (droneMarker1) { map.removeLayer(droneMarker1); droneMarker1 = null }
 }
 
-export function spawnDrone2() {
+export function spawnDrone2(onDetect) {
   clearDrone2()
-  droneMarker2 = L.marker(DRONE2_PATH[0], { icon: makeDroneIcon('#ff9800'), zIndexOffset: 2000 }).addTo(map)
 
-  trackPolyline(
-    L.polyline(DRONE2_PATH, { color: '#ff9800', weight: 1.5, dashArray: '6 4', opacity: 0.6 }).addTo(map)
-  )
+  droneMarker2 = L.marker(DRONE2_PATH[0], { icon: makeRadarBlipIcon(), zIndexOffset: 2000 }).addTo(map)
 
-  map.flyTo([50.6100, 22.0660], 13, { duration: 1 })
+  // Ślad rośnie na bieżąco
+  const droneTrail2 = L.polyline([DRONE2_PATH[0]], {
+    color: '#ff9800', weight: 1.5, dashArray: '6 4', opacity: 0.55,
+  }).addTo(map)
+  trackPolyline(droneTrail2)
 
-  let i = 0
-  droneInterval2 = setInterval(() => {
-    i++
-    if (i < DRONE2_PATH.length) {
-      droneMarker2.setLatLng(DRONE2_PATH[i])
+  const DURATION = 15000   // 15 sekund do punktu detekcji
+  const segments = DRONE2_DETECT_IDX
+  const startTime = performance.now()
+  let rafId2 = null
+
+  function animateDrone2(now) {
+    const t = Math.min((now - startTime) / DURATION, 1)
+
+    const segT    = t * segments
+    const segIdx  = Math.min(Math.floor(segT), segments - 1)
+    const segFrac = segT - segIdx
+    const a = DRONE2_PATH[segIdx]
+    const b = DRONE2_PATH[segIdx + 1]
+    const pos = [
+      a[0] + (b[0] - a[0]) * segFrac,
+      a[1] + (b[1] - a[1]) * segFrac,
+    ]
+    if (droneMarker2) droneMarker2.setLatLng(pos)
+    droneTrail2.addLatLng(pos)
+
+    if (t < 1) {
+      rafId2 = requestAnimationFrame(animateDrone2)
     } else {
-      clearInterval(droneInterval2)
+      // Dron wykryty — zmień ikonę na zidentyfikowany
+      const detPt = DRONE2_PATH[DRONE2_DETECT_IDX]
+      if (droneMarker2) {
+        droneMarker2.setLatLng(detPt)
+        droneMarker2.setIcon(L.divIcon({
+          html: `<img src="/dronkrok4.png" style="width:38px;height:38px;object-fit:contain;filter:drop-shadow(0 0 8px #ff9800) drop-shadow(0 0 4px rgba(255,152,0,0.6));animation:drone-bob 0.7s ease-in-out infinite alternate;" />`,
+          className: '', iconSize: [38, 38], iconAnchor: [19, 19],
+        }))
+      }
+      rafId2 = null
+      if (onDetect) onDetect()
     }
-  }, 500)
-}
-
-export function impactDrone2() {
-  clearInterval(droneInterval2)
-  if (droneMarker2) {
-    droneMarker2.setIcon(L.divIcon({ html: '<div style="font-size:32px">💥</div>', className: '', iconSize: [36, 36] }))
-    setTimeout(() => { if (droneMarker2) { map.removeLayer(droneMarker2); droneMarker2 = null } }, 1500)
   }
 
-  markNodeDestroyed(4)
+  rafId2 = requestAnimationFrame(animateDrone2)
+  droneInterval2 = { cancel: () => { if (rafId2) cancelAnimationFrame(rafId2) } }
+}
 
-  impactCircle = L.circle([50.5900, 22.0610], {
-    radius: 500, color: '#ef5350', fillColor: '#ef5350', fillOpacity: 0.2, weight: 2,
-  }).bindTooltip('🔴 SEKTOR C — UDERZENIE').addTo(map)
-  demoPolylines.push(impactCircle)
+export function impactDrone2(onImpact) {
+  if (droneInterval2?.cancel) droneInterval2.cancel()
+  else clearInterval(droneInterval2)
+  droneInterval2 = null
 
-  map.flyTo([50.5900, 22.0610], 15, { duration: 1 })
+  if (!droneMarker2) return
+
+  // Dron leci od punktu detekcji do celu
+  const remainingPath = DRONE2_PATH.slice(DRONE2_DETECT_IDX)
+  const segments = remainingPath.length - 1
+  const targetPt = remainingPath[remainingPath.length - 1]
+
+  // Kontynuuj rysowanie śladu
+  const impactTrail = L.polyline([remainingPath[0]], {
+    color: '#ef5350', weight: 2, dashArray: '5 3', opacity: 0.7,
+  }).addTo(map)
+  demoPolylines.push(impactTrail)
+
+  // Przybliż kamerę żeby widać było lot
+  map.flyTo([
+    (remainingPath[0][0] + targetPt[0]) / 2,
+    (remainingPath[0][1] + targetPt[1]) / 2,
+  ], 14, { duration: 0.8 })
+
+  const DURATION = 8000  // 8 sekund lotu do celu
+  const startTime = performance.now()
+  let rafId = null
+
+  function animate(now) {
+    const t = Math.min((now - startTime) / DURATION, 1)
+
+    const segT    = t * segments
+    const segIdx  = Math.min(Math.floor(segT), segments - 1)
+    const segFrac = segT - segIdx
+    const a = remainingPath[segIdx]
+    const b = remainingPath[segIdx + 1]
+    const pos = [
+      a[0] + (b[0] - a[0]) * segFrac,
+      a[1] + (b[1] - a[1]) * segFrac,
+    ]
+    if (droneMarker2) droneMarker2.setLatLng(pos)
+    impactTrail.addLatLng(pos)
+
+    if (t < 1) {
+      rafId = requestAnimationFrame(animate)
+      return
+    }
+
+    // ── Uderzenie! ──
+    map.flyTo(targetPt, 15, { duration: 0.6 })
+
+    if (droneMarker2) {
+      droneMarker2.setIcon(L.divIcon({
+        html: '<div style="font-size:36px">💥</div>',
+        className: '', iconSize: [40, 40], iconAnchor: [20, 20],
+      }))
+      setTimeout(() => {
+        if (droneMarker2) { map.removeLayer(droneMarker2); droneMarker2 = null }
+      }, 1500)
+    }
+
+    // Czerwone kółko uderzenia
+    impactCircle = L.circle(targetPt, {
+      radius: 400, color: '#ef5350', fillColor: '#ef5350', fillOpacity: 0.45, weight: 2.5,
+    }).bindTooltip('🔴 UDERZENIE — Elektrociepłownia SW', { permanent: true }).addTo(map)
+    demoPolylines.push(impactCircle)
+
+    markNodeDestroyed(4)
+
+    if (onImpact) setTimeout(onImpact, 2000)
+  }
+
+  rafId = requestAnimationFrame(animate)
 }
 
 export function clearDrone2() {
-  clearInterval(droneInterval2)
+  if (droneInterval2?.cancel) droneInterval2.cancel()
+  else clearInterval(droneInterval2)
+  droneInterval2 = null
   if (droneMarker2) { map.removeLayer(droneMarker2); droneMarker2 = null }
 }
 
@@ -710,6 +1055,9 @@ function markNodeDestroyed(nodeId) {
 export function resetMap() {
   clearDrone1()
   clearDrone2()
+
+  // Usuń parkującego helikoptera
+  if (parkedHeliMarker) { try { map.removeLayer(parkedHeliMarker) } catch {} parkedHeliMarker = null }
 
   // Usuń wszystkie linie i kręgi z demo
   demoPolylines.forEach(p => { try { map.removeLayer(p) } catch {} })
@@ -730,6 +1078,10 @@ export function resetMap() {
 }
 
 export function getMap() { return map }
+
+export function centerMapOn(lat, lng) {
+  if (map) map.panTo([lat, lng], { animate: true, duration: 0.6 })
+}
 
 // ---- Helpers ----
 function riskBg(r) {

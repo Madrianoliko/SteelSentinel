@@ -38,13 +38,65 @@
     <div id="view-map" class="view active">
       <div id="map"></div>
 
+      <!-- FILTER BAR (floating over map, top-left) -->
+      <div id="filter-bar">
+        <button id="filter-toggle" class="filter-toggle-btn" title="Kategorie">
+          <span class="filter-bars">
+            <span></span><span></span><span></span>
+          </span>
+          <span class="filter-toggle-label">FILTRY</span>
+          <span id="filter-badge" class="filter-badge">11</span>
+        </button>
+        <div id="filter-panel" class="filter-panel hidden">
+          <div id="category-filters" class="chip-list"></div>
+        </div>
+      </div>
+
       <!-- LEFT SIDEBAR -->
       <aside id="sidebar">
+
+        <!-- Stan systemu -->
         <section class="sidebar-section">
-          <h4 class="section-title">Kategorie</h4>
-          <div class="filter-list" id="category-filters"></div>
+          <h4 class="section-title">Stan systemu</h4>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="stat-val" id="stat-objects">115</div>
+              <div class="stat-lbl">Obiektów</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val danger" id="stat-threats">0</div>
+              <div class="stat-lbl">Zagrożenia</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val warn" id="stat-critical">8</div>
+              <div class="stat-lbl">Krytycznych</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val" id="stat-sectors">12</div>
+              <div class="stat-lbl">Sektorów</div>
+            </div>
+          </div>
         </section>
 
+        <!-- Wybrany obiekt (pojawia się po kliknięciu) -->
+        <section class="sidebar-section" id="node-detail-section" style="display:none">
+          <h4 class="section-title">Wybrany obiekt</h4>
+          <div id="node-detail"></div>
+        </section>
+
+        <!-- Podkład mapy -->
+        <section class="sidebar-section">
+          <h4 class="section-title">Podkład mapy</h4>
+          <div class="basemap-list" id="basemap-list">
+            <button class="basemap-btn active" data-basemap="dark">🌑 Taktyczna</button>
+            <button class="basemap-btn" data-basemap="carto">🖤 Ciemna</button>
+            <button class="basemap-btn" data-basemap="standard">🗺️ Standardowa</button>
+            <button class="basemap-btn" data-basemap="satellite">🛰️ Satelita</button>
+            <button class="basemap-btn" data-basemap="topo">⛰️ Teren</button>
+          </div>
+        </section>
+
+        <!-- Warstwy -->
         <section class="sidebar-section">
           <h4 class="section-title">Warstwy</h4>
           <label class="layer-toggle">
@@ -73,27 +125,27 @@
           </label>
         </section>
 
-        <section class="sidebar-section" id="node-detail-section" style="display:none">
-          <h4 class="section-title">Wybrany obiekt</h4>
-          <div id="node-detail"></div>
-          <button class="btn-secondary mt-8" id="btn-cascade">📊 Analiza kaskadowa</button>
-        </section>
       </aside>
+
+      <!-- TOP ALERT BANNERS -->
+      <div id="top-alerts"></div>
+
+      <!-- SIDE ALERT (nie zasłania mapy) -->
+      <div id="side-alert">
+        <div class="side-alert-header">
+          <span class="side-alert-icon" id="side-alert-icon"></span>
+          <span class="side-alert-title" id="side-alert-title"></span>
+          <button class="side-alert-close" id="side-alert-close">×</button>
+        </div>
+        <div class="side-alert-body" id="side-alert-body"></div>
+        <div class="side-alert-actions" id="side-alert-actions"></div>
+      </div>
 
       <!-- DEMO PANEL -->
       <div id="demo-panel">
-        <div class="demo-header">
-          <span>⌨️ DEMO</span>
-          <button id="demo-toggle" title="Zwiń/rozwiń">−</button>
-        </div>
         <div id="demo-body">
-          <div class="demo-step" data-step="1"><kbd>1</kbd> Wykryj drona #1</div>
-          <div class="demo-step" data-step="2"><kbd>2</kbd> Rekomendacja AI</div>
-          <div class="demo-step" data-step="3"><kbd>3</kbd> Zestrzel ✓</div>
-          <div class="demo-step" data-step="4"><kbd>4</kbd> Wykryj drona #2</div>
-          <div class="demo-step" data-step="5"><kbd>5</kbd> Brak zasobów</div>
-          <div class="demo-step" data-step="6"><kbd>6</kbd> Uderzenie + kaskada</div>
-          <div class="demo-step reset" data-step="0"><kbd>R</kbd> Reset</div>
+          <div class="demo-step launch" data-step="1">▶ Demo</div>
+          <div class="demo-step reset" data-step="0">↺ Reset</div>
         </div>
       </div>
     </div>
@@ -101,6 +153,17 @@
     <!-- GRAPH VIEW -->
     <div id="view-graph" class="view">
       <div id="graph-container"></div>
+
+      <!-- TOP CONTROLS -->
+      <div id="graph-controls">
+        <div class="graph-mode-btns">
+          <button class="graph-mode-btn active" data-mode="critical">⚠️ Krytyczne / Wysokie</button>
+          <button class="graph-mode-btn" data-mode="all">📋 Wszystkie węzły</button>
+        </div>
+        <div class="graph-divider"></div>
+        <div id="graph-cat-chips" class="graph-cat-chips"></div>
+      </div>
+
       <div id="graph-legend">
         <h4>Zależności</h4>
         <div class="legend-row"><span class="dot energy"></span>Zasilanie</div>
@@ -153,11 +216,13 @@
   </div>
 
   <div id="cascade-panel" class="cascade-panel hidden">
-    <div class="cascade-header">
-      <h3>🔴 Analiza kaskadowa</h3>
-      <button id="cascade-close">×</button>
+    <div class="cascade-box">
+      <div class="cascade-header">
+        <h3>🔴 Analiza kaskadowa</h3>
+        <button id="cascade-close">×</button>
+      </div>
+      <div id="cascade-content"></div>
     </div>
-    <div id="cascade-content"></div>
   </div>
 
   <div id="toast" class="toast hidden"></div>

@@ -753,10 +753,11 @@ EDGES = [
 def seed():
     db = SessionLocal()
     try:
-        db.query(ThreatEvent).delete()
-        db.query(InfrastructureEdge).delete()
-        db.query(InfrastructureNode).delete()
-        db.commit()
+        # Idempotent: skip if data already exists
+        existing = db.query(InfrastructureNode).count()
+        if existing > 0:
+            print(f"ℹ️  Baza już zawiera {existing} węzłów — pomijam seed")
+            return
 
         for n in NODES:
             resources = n.pop("resources", {})
@@ -776,7 +777,7 @@ def seed():
 
     except Exception as ex:
         db.rollback()
-        print(f"❌ Błąd: {ex}")
+        print(f"❌ Błąd seed: {ex}")
         raise
     finally:
         db.close()
