@@ -57,7 +57,10 @@ if os.path.isdir(STATIC_DIR) and os.path.isfile(INDEX_HTML):
 
     @app.get("/{full_path:path}")
     def serve_spa_fallback(full_path: str):
-        """SPA fallback — wszystkie ścieżki nie-API serwują index.html"""
+        """Serwuj statyczne pliki (PNG, SVG, …) jeśli istnieją, inaczej SPA fallback."""
+        candidate = os.path.join(STATIC_DIR, full_path)
+        if os.path.isfile(candidate):
+            return FileResponse(candidate)
         return FileResponse(INDEX_HTML)
 else:
     @app.get("/")

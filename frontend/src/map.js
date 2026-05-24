@@ -188,7 +188,10 @@ export function toggleSensors(visible) {
 }
 
 export function toggleGpsJam(visible) {
-  if (overlayLayers.gpsJam) { map.removeLayer(overlayLayers.gpsJam); overlayLayers.gpsJam = null }
+  if (overlayLayers.gpsJam) {
+    try { overlayLayers.gpsJam._legend?.remove() } catch {}
+    map.removeLayer(overlayLayers.gpsJam); overlayLayers.gpsJam = null
+  }
   if (!visible) return
 
   const g = L.layerGroup()
@@ -362,7 +365,10 @@ export function toggleCuav(visible) {
 
 // ── AIR DEFENSE LAYER ────────────────────────────────────────────────────────
 export function toggleAirDefense(visible) {
-  if (overlayLayers.airDefense) { map.removeLayer(overlayLayers.airDefense); overlayLayers.airDefense = null }
+  if (overlayLayers.airDefense) {
+    try { overlayLayers.airDefense._legend?.remove() } catch {}
+    map.removeLayer(overlayLayers.airDefense); overlayLayers.airDefense = null
+  }
   if (!visible) return
 
   const g = L.layerGroup()
@@ -578,7 +584,10 @@ const FLOOD_ZONES = {
 }
 
 export function toggleFlood(visible) {
-  if (overlayLayers.flood) { map.removeLayer(overlayLayers.flood); overlayLayers.flood = null }
+  if (overlayLayers.flood) {
+    try { overlayLayers.flood._floodLegend?.remove() } catch {}
+    map.removeLayer(overlayLayers.flood); overlayLayers.flood = null
+  }
   if (!visible) return
 
   const g = L.layerGroup()
