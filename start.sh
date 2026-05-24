@@ -1,11 +1,11 @@
 #!/bin/sh
 set -e
 
-echo "🛡️  Steel Sentinel — starting up"
+echo "Steel Sentinel — starting up"
 
 # Railway injects DATABASE_URL automatically for Postgres plugin.
 # Fix URL scheme: Railway sometimes gives postgres:// but SQLAlchemy needs postgresql://
-export DATABASE_URL="${DATABASE_URL/postgres:\/\//postgresql://}"
+export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's|^postgres://|postgresql://|')
 
 echo "⏳ Running database migrations..."
 alembic upgrade head
