@@ -84,7 +84,49 @@ async function main() {
     }
   })
 
+  // Mobile sidebar toggle
+  initMobileSidebar()
+
   console.log('🛡️ Steel Sentinel initialized', { nodes: nodes.length })
+}
+
+function initMobileSidebar() {
+  const btn     = document.getElementById('sidebar-toggle')
+  const sidebar = document.getElementById('sidebar')
+  if (!btn || !sidebar) return
+
+  const isMobile = () => window.innerWidth <= 768
+
+  // Show/hide button based on viewport
+  const syncBtn = () => { btn.style.display = isMobile() ? 'flex' : 'none' }
+  syncBtn()
+  window.addEventListener('resize', syncBtn)
+
+  btn.addEventListener('click', () => {
+    const open = sidebar.classList.toggle('open')
+    btn.textContent = open ? '✕' : '⚙️'
+  })
+
+  // Close sidebar when user taps the map
+  document.getElementById('map')?.addEventListener('click', () => {
+    if (isMobile() && sidebar.classList.contains('open')) {
+      sidebar.classList.remove('open')
+      btn.textContent = '⚙️'
+    }
+  })
+
+  // Auto-open sidebar briefly when node detail is shown on mobile
+  const origShowDetail = window.__showNodeDetailHook
+  // Patch showNodeDetail to auto-open sidebar on mobile
+  const observer = new MutationObserver(() => {
+    const section = document.getElementById('node-detail-section')
+    if (section && section.style.display !== 'none' && isMobile()) {
+      sidebar.classList.add('open')
+      btn.textContent = '✕'
+    }
+  })
+  const section = document.getElementById('node-detail-section')
+  if (section) observer.observe(section, { attributes: true, attributeFilter: ['style'] })
 }
 
 main()
