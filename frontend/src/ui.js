@@ -22,7 +22,8 @@ function switchView(view, onSwitch) {
   // Lazy-load presentation iframe on first open
   if (view === 'presentation') {
     const frame = document.getElementById('presentation-frame')
-    if (frame && !frame.src) frame.src = frame.dataset.src
+    // frame.src returns full URL even when attr is "", so check the attribute directly
+    if (frame && !frame.getAttribute('src')) frame.src = frame.dataset.src
   }
 
   onSwitch?.(view)
