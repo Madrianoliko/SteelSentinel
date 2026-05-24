@@ -23,6 +23,7 @@
         ⚠️ Zagrożenia
         <span id="threats-badge" class="threats-badge" style="display:none">0</span>
       </button>
+      <button class="nav-btn" data-view="presentation">📊 Prezentacja</button>
     </nav>
     <div class="header-status">
       <span class="status-dot"></span>
@@ -195,6 +196,21 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- PRESENTATION VIEW -->
+    <div id="view-presentation" class="view">
+      <button id="presentation-back" title="Wróć do dashboardu">
+        <span>←</span> Dashboard
+      </button>
+      <iframe
+        id="presentation-frame"
+        src=""
+        data-src="/prezentacja.html"
+        frameborder="0"
+        allowfullscreen
+        title="Prezentacja Steel Sentinel"
+      ></iframe>
     </div>
 
   </main>

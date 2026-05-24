@@ -1202,6 +1202,52 @@ kbd {
 
 .sensor-icon { font-size: 16px; opacity: 0.8; }
 
+/* ── PRESENTATION VIEW ───────────────────────────────────────── */
+#view-presentation {
+  position: relative;
+  background: #05080f;
+}
+
+#presentation-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+#presentation-back {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(10, 16, 32, 0.88);
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  border-radius: 8px;
+  color: #00d4ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+  backdrop-filter: blur(8px);
+}
+#presentation-back:hover {
+  background: rgba(0, 212, 255, 0.12);
+  border-color: rgba(0, 212, 255, 0.7);
+  transform: translateY(-1px);
+}
+#presentation-back span {
+  font-size: 16px;
+  line-height: 1;
+}
+
 /* Sector highlight */
 .sector-label {
   background: transparent;

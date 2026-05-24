@@ -11,17 +11,33 @@ export function startClock() {
 }
 
 // ---------- Navigation ----------
+function switchView(view, onSwitch) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'))
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
+  const navBtn = document.querySelector(`.nav-btn[data-view="${view}"]`)
+  if (navBtn) navBtn.classList.add('active')
+  const viewEl = document.getElementById(`view-${view}`)
+  if (viewEl) viewEl.classList.add('active')
+
+  // Lazy-load presentation iframe on first open
+  if (view === 'presentation') {
+    const frame = document.getElementById('presentation-frame')
+    if (frame && !frame.src) frame.src = frame.dataset.src
+  }
+
+  onSwitch?.(view)
+}
+
 export function initNav(onSwitch) {
   document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'))
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
-      btn.classList.add('active')
-      const view = btn.dataset.view
-      document.getElementById(`view-${view}`).classList.add('active')
-      onSwitch?.(view)
-    })
+    btn.addEventListener('click', () => switchView(btn.dataset.view, onSwitch))
   })
+
+  // Presentation back button → return to map
+  const backBtn = document.getElementById('presentation-back')
+  if (backBtn) {
+    backBtn.addEventListener('click', () => switchView('map', onSwitch))
+  }
 }
 
 // ---------- Alert Modal ----------
